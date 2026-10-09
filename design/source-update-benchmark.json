@@ -1,0 +1,96 @@
+{
+  "generatedAt": "2026-10-09T12:48:38.073Z",
+  "maplibreVersion": "6.13.0",
+  "indexVersion": "6.1.2",
+  "method": "Installed MapLibre worker index kernel; identical resident features, removals and 3×3 tile reads at radius-derived zoom. 1 warmup plus 5 trials, medians over up to20 batches of28 removals. Excludes source cloning, WebGL and device FPS.",
+  "rows": [
+    {
+      "city": "pushkin",
+      "radius": 18,
+      "consumed": 0,
+      "resident": 1024,
+      "batches": 20,
+      "objectsRemoved": 560,
+      "medianTotalMsBefore": 168.248,
+      "medianTotalMsAfter": 67.288,
+      "tileFeatures": 101016
+    },
+    {
+      "city": "pushkin",
+      "radius": 18,
+      "consumed": 6000,
+      "resident": 499,
+      "batches": 18,
+      "objectsRemoved": 499,
+      "medianTotalMsBefore": 45.449,
+      "medianTotalMsAfter": 30.787,
+      "tileFeatures": 33156
+    },
+    {
+      "city": "pushkin",
+      "radius": 500,
+      "consumed": 0,
+      "resident": 8411,
+      "batches": 20,
+      "objectsRemoved": 560,
+      "medianTotalMsBefore": 978.822,
+      "medianTotalMsAfter": 612.087,
+      "tileFeatures": 4507608
+    },
+    {
+      "city": "pushkin",
+      "radius": 500,
+      "consumed": 6000,
+      "resident": 5033,
+      "batches": 20,
+      "objectsRemoved": 560,
+      "medianTotalMsBefore": 493.591,
+      "medianTotalMsAfter": 263.394,
+      "tileFeatures": 2330040
+    },
+    {
+      "city": "gatchina",
+      "radius": 18,
+      "consumed": 0,
+      "resident": 1309,
+      "batches": 20,
+      "objectsRemoved": 560,
+      "medianTotalMsBefore": 184.988,
+      "medianTotalMsAfter": 98.325,
+      "tileFeatures": 130320
+    },
+    {
+      "city": "gatchina",
+      "radius": 18,
+      "consumed": 6000,
+      "resident": 1309,
+      "batches": 20,
+      "objectsRemoved": 560,
+      "medianTotalMsBefore": 171.498,
+      "medianTotalMsAfter": 75.231,
+      "tileFeatures": 130320
+    },
+    {
+      "city": "gatchina",
+      "radius": 500,
+      "consumed": 0,
+      "resident": 7542,
+      "batches": 20,
+      "objectsRemoved": 560,
+      "medianTotalMsBefore": 623.776,
+      "medianTotalMsAfter": 371.74,
+      "tileFeatures": 2446020
+    },
+    {
+      "city": "gatchina",
+      "radius": 500,
+      "consumed": 6000,
+      "resident": 5378,
+      "batches": 20,
+      "objectsRemoved": 560,
+      "medianTotalMsBefore": 406.982,
+      "medianTotalMsAfter": 219.423,
+      "tileFeatures": 1397952
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+/** Lightweight cache contract shared by main thread and import worker. */
+export const OSM_IMPORT_PIPELINE='browser-osm-v1';
+export function compatibleSectorCache(record,sector){const m=record?.manifest;return Boolean(record?.id===sector.id&&m?.id===sector.id&&m.arenaSize===10000&&m.chunkSize===1000&&Array.isArray(m.chunks)&&m.center?.length===2&&m.center.every((v,i)=>Number.isFinite(v)&&Math.abs(v-sector.center[i])<1e-7)&&record.provenance?.pipeline===OSM_IMPORT_PIPELINE&&typeof m.version==='string'&&m.version.startsWith(`osm-${OSM_IMPORT_PIPELINE}-`)&&m.background?.type==='geojson'&&m.background.data?.type==='FeatureCollection');}

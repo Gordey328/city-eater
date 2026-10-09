@@ -1,0 +1,42 @@
+# Any-city campaign: architecture and service constraints
+
+Verified 2026-10-09. This expands the earlier prepared-city-only scope.
+
+## Minimal static architecture
+
+1. A same-origin world picker displays bundled Natural Earth country outlines and searches a compact, local GeoNames index. A map click or longitude/latitude input can choose a place absent from the name index. No public geocoder is required.
+2. On an explicit city-boundary lookup, Overpass `is_in` plus `rel(pivot)` returns administrative relation names, IDs and bounding boxes. The player chooses the appropriate result. Administrative levels differ by country: never assume that level 8 always means a city. Missing or ambiguous boundaries have an explicitly manual extent alternative.
+3. The campaign covers the chosen envelope with 10 km × 10 km sectors. The UI distinguishes the rectangular administrative envelope from the actual administrative polygon; it includes surrounding land. Complete edge sectors can extend beyond the envelope. It must never describe an arbitrary default rectangle as the complete city.
+4. Only the explicitly selected sector is prepared. Fetch its bounded OSM geometry once, normalize in a worker, store prepared geometry and provenance in IndexedDB, then use local data during play. No Overpass request belongs in the frame loop or viewport-streaming loop. A new selection or cancel must invalidate old asynchronous results.
+5. Persist progress by deterministic campaign/sector IDs. Show completed sectors out of total. The total mapped building area of unloaded sectors is unknown, so the loaded-area percentage is not a whole-city percentage.
+
+Prepared Pushkin/Gatchina levels retain self-hosted PMTiles. Newly imported sectors use locally prepared GeoJSON backgrounds and independent building chunks. That is an explicit change from the original all-PMTiles background requirement. Generating PMTiles in the browser is unnecessary for the initial version; a later offline export can promote popular areas to the prepared static catalog.
+
+## Pure module and metric convention
+
+`src/city-campaign.js` provides coordinate/bounds validation, the boundary query, candidate parsing, manual extents, deterministic campaigns and progress summaries. Each sector uses the existing local-equirectangular metre convention centered on that sector. Rows share latitude boundaries; longitude width is calculated at each row midpoint. This gives exact ±5000 m local arena corners, seamless coverage inside the chosen envelope and no positive-area overlap. Row column counts can vary with latitude. It is a local planar gameplay convention, not a geodesic cadastral measurement.
+
+Sector IDs use the boundary identifier and selected bounds plus row/column. Display ordering is nearest the chosen city point first, then outward. Changing the display name does not erase progress. The current safety cap rejects an envelope requiring more than 1600 sectors; it does not silently truncate it. Polar limits and date-line handling are explicit.
+
+Keep the existing building rules: complete real footprints only; courtyard holes subtract from area; relations supersede their outer ways; stable OSM identity; enclosing circle over the full footprint; no generated replacement buildings. Boundary-crossing buildings are excluded as in the prepared pipeline, so campaign completion is not a claim to count every building touching a city. A successful sector with no mapped buildings must be distinguished from a failed/partial query and must not trap campaign progression.
+
+## Service policy and probes
+
+- Public Nominatim is deliberately absent. Its [official usage policy](https://operations.osmfoundation.org/policies/nominatim/) specifies an application-wide maximum of one request per second, forbids autocomplete, and now restricts automatically generated generic place-search integrations without an informed developer decision. A client-only throttle cannot enforce an aggregate limit across all users.
+- The [Overpass operator manual](https://dev.overpass-api.de/overpass-doc/en/preface/commons.html) describes best-effort shared resources, cooldowns, 429 rate denial and 504 resource denial. Its broad 10,000-request/1 GB daily guideline is not an unlimited application entitlement. The operator's [2026-08-26 clarification](https://community.openstreetmap.org/t/overpass-api-performance-issues/140598/171) says to divide the one-off guideline by 100 for regular use and aggregate all application users. The [2026-08-11 statement](https://community.openstreetmap.org/t/overpass-api-performance-issues/140598/157) requires waiting at least 30 seconds after 429/406 and explains current overload and bans on some fast-deployment platforms.
+- The [OSM public-instance directory](https://wiki.openstreetmap.org/wiki/Overpass_API#Public_Overpass_API_instances) lists VK Maps as allowing projects without a stated request limit. Its [operator-hosted frontend](https://maps.mail.ru/osm/tools/overpass/) and endpoint `https://maps.mail.ru/osm/tools/overpass/api/interpreter` are reachable. This directory statement is weaker than a contractual SLA; a separate definitive operator usage policy was not found. Do not promise permanent availability or unlimited capacity.
+- A single tiny main-instance read returned HTTP 200 and `Access-Control-Allow-Origin: *`; a single VK administrative metadata read also returned HTTP 200/CORS `*` and the actual Pushkin relation 359179 with bounds `[30.2182227,59.6337832,30.4626647,59.7617962]`. These probes verify immediate accessibility, not a successful full-sector import or long-term service quality.
+
+Choose a provider deliberately, never rotate providers to escape a refusal or quota. Keep one request in flight, explicit finite timeout/server memory budget, a separate streamed response-byte cap, bounded client feature/vertex limits and an abort control. Overpass `maxsize` limits server working memory, not HTTP response bytes. Any response `remark` means incomplete/failed data, even with HTTP 200. Honor Retry-After where available and enforce at least 30 seconds before a user retry after 429/406; do not run an automatic retry loop. Cache successful results instead of fetching the same sector repeatedly.
+
+The UI must report dense-sector limits, network/CORS failure, storage failure and unavailable service honestly. A user-configured compatible endpoint or a locally imported prepared dataset is a legitimate alternative, but not an automatic quota workaround. Free static hosting plus donated public APIs cannot guarantee unrestricted worldwide production service.
+
+## Bundled assets and licensing
+
+`scripts/build_world_picker.py` reproducibly downloads and prepares `public/data/world/land.geojson`, `cities.json` and `provenance.json`. Provenance records source URLs, download hashes and transformations.
+
+- Natural Earth country outlines: [official repository](https://github.com/nvkelso/natural-earth-vector), [public-domain terms](https://www.naturalearthdata.com/about/terms-of-use/). Generalized 110m-scale outlines are navigation context, not gameplay/city boundaries.
+- GeoNames: [cities15000 download](https://download.geonames.org/export/dump/cities15000.zip), [official schema and CC-BY-4.0 licensing](https://download.geonames.org/export/dump/readme.txt). The compact index covers places over 15,000 population or capitals and retains at most three alternate spellings. Display attribution to GeoNames and retain modification/license notices. Map selection remains available for omitted places.
+- Gameplay data: OpenStreetMap contributors, ODbL; preserve attribution, source timestamp and export/provenance. [OSM copyright](https://www.openstreetmap.org/copyright).
+
+Do not hotlink a planet PMTiles archive as the production fallback: [Protomaps documentation](https://docs.protomaps.com/basemaps/downloads) discourages hotlinking and instructs users to copy the tileset to their own storage. Do not bulk-prefetch standard OSM raster tiles: [official tile policy](https://operations.osmfoundation.org/policies/tiles/) prohibits offline/bulk download. Neither service is needed by this picker/runtime architecture.

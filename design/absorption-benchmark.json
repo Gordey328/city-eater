@@ -1,0 +1,1468 @@
+{
+  "generatedAt": "2026-10-09T12:35:52.465Z",
+  "node": "v24.19.0",
+  "method": "Node CPU microbenchmarks; medians and p95, no WebGL/phone FPS. Legacy kernels from a6cd03e8. Source timings include structuredClone; worker tiling/GPU excluded. 390×844 viewport; radius and consumed history varied independently to isolate costs.",
+  "rows": [
+    {
+      "dataset": "pushkin",
+      "radius": 18,
+      "consumed": 0,
+      "residentBuildings": 1024,
+      "residentChunks": 4,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 8.8537,
+        "p95Ms": 20.2187
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0041,
+        "p95Ms": 0.016
+      },
+      "payloadBytesBefore": 392488,
+      "payloadBytesAfter": 347,
+      "queryFitBefore": {
+        "medianMs": 0.0052,
+        "p95Ms": 0.0431
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0042,
+        "p95Ms": 0.0222
+      },
+      "allocatedFeatureObjectsBefore": 996,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "pushkin",
+      "radius": 18,
+      "consumed": 1000,
+      "residentBuildings": 1024,
+      "residentChunks": 4,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 6.1475,
+        "p95Ms": 7.2498
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0032,
+        "p95Ms": 0.0039
+      },
+      "payloadBytesBefore": 392488,
+      "payloadBytesAfter": 347,
+      "queryFitBefore": {
+        "medianMs": 0.0042,
+        "p95Ms": 0.0048
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0036,
+        "p95Ms": 0.0281
+      },
+      "allocatedFeatureObjectsBefore": 996,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "pushkin",
+      "radius": 18,
+      "consumed": 6000,
+      "residentBuildings": 499,
+      "residentChunks": 4,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 2.5746,
+        "p95Ms": 8.5663
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0035,
+        "p95Ms": 0.0042
+      },
+      "payloadBytesBefore": 180808,
+      "payloadBytesAfter": 358,
+      "queryFitBefore": {
+        "medianMs": 0.002,
+        "p95Ms": 0.0069
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0012,
+        "p95Ms": 0.0016
+      },
+      "allocatedFeatureObjectsBefore": 471,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "pushkin",
+      "radius": 18,
+      "consumed": 12000,
+      "residentBuildings": 0,
+      "residentChunks": 4,
+      "changedIds": 0,
+      "sourceCloneBefore": {
+        "medianMs": 0.0018,
+        "p95Ms": 0.0023
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0014,
+        "p95Ms": 0.0018
+      },
+      "payloadBytesBefore": 42,
+      "payloadBytesAfter": 13,
+      "queryFitBefore": {
+        "medianMs": 0.0013,
+        "p95Ms": 0.0017
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0008,
+        "p95Ms": 0.0011
+      },
+      "allocatedFeatureObjectsBefore": 0,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "pushkin",
+      "radius": 100,
+      "consumed": 0,
+      "residentBuildings": 1644,
+      "residentChunks": 8,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 8.6116,
+        "p95Ms": 21.4691
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0034,
+        "p95Ms": 0.0085
+      },
+      "payloadBytesBefore": 625630,
+      "payloadBytesAfter": 363,
+      "queryFitBefore": {
+        "medianMs": 0.0201,
+        "p95Ms": 0.0476
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0092,
+        "p95Ms": 0.0266
+      },
+      "allocatedFeatureObjectsBefore": 1616,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "pushkin",
+      "radius": 100,
+      "consumed": 1000,
+      "residentBuildings": 1644,
+      "residentChunks": 8,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 8.9862,
+        "p95Ms": 10.9699
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0031,
+        "p95Ms": 0.0035
+      },
+      "payloadBytesBefore": 625630,
+      "payloadBytesAfter": 363,
+      "queryFitBefore": {
+        "medianMs": 0.0132,
+        "p95Ms": 0.014
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0085,
+        "p95Ms": 0.0129
+      },
+      "allocatedFeatureObjectsBefore": 1616,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "pushkin",
+      "radius": 100,
+      "consumed": 6000,
+      "residentBuildings": 680,
+      "residentChunks": 8,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 3.2574,
+        "p95Ms": 4.1092
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0031,
+        "p95Ms": 0.0042
+      },
+      "payloadBytesBefore": 245134,
+      "payloadBytesAfter": 372,
+      "queryFitBefore": {
+        "medianMs": 0.0047,
+        "p95Ms": 0.04
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0024,
+        "p95Ms": 0.0026
+      },
+      "allocatedFeatureObjectsBefore": 652,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "pushkin",
+      "radius": 100,
+      "consumed": 12000,
+      "residentBuildings": 0,
+      "residentChunks": 8,
+      "changedIds": 0,
+      "sourceCloneBefore": {
+        "medianMs": 0.0017,
+        "p95Ms": 0.0035
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0014,
+        "p95Ms": 0.0016
+      },
+      "payloadBytesBefore": 42,
+      "payloadBytesAfter": 13,
+      "queryFitBefore": {
+        "medianMs": 0.0007,
+        "p95Ms": 0.001
+      },
+      "queryFitAfter": {
+        "medianMs": 0.001,
+        "p95Ms": 0.0021
+      },
+      "allocatedFeatureObjectsBefore": 0,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "pushkin",
+      "radius": 250,
+      "consumed": 0,
+      "residentBuildings": 4302,
+      "residentChunks": 23,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 28.0232,
+        "p95Ms": 38.0644
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0033,
+        "p95Ms": 0.0045
+      },
+      "payloadBytesBefore": 1603666,
+      "payloadBytesAfter": 388,
+      "queryFitBefore": {
+        "medianMs": 0.0738,
+        "p95Ms": 0.1243
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0401,
+        "p95Ms": 0.1066
+      },
+      "allocatedFeatureObjectsBefore": 4274,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "pushkin",
+      "radius": 250,
+      "consumed": 1000,
+      "residentBuildings": 4302,
+      "residentChunks": 23,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 28.6385,
+        "p95Ms": 42.7811
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0032,
+        "p95Ms": 0.0035
+      },
+      "payloadBytesBefore": 1603666,
+      "payloadBytesAfter": 388,
+      "queryFitBefore": {
+        "medianMs": 0.0604,
+        "p95Ms": 0.1317
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0227,
+        "p95Ms": 0.0336
+      },
+      "allocatedFeatureObjectsBefore": 4274,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "pushkin",
+      "radius": 250,
+      "consumed": 6000,
+      "residentBuildings": 2360,
+      "residentChunks": 23,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 12.2739,
+        "p95Ms": 21.9746
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.003,
+        "p95Ms": 0.0038
+      },
+      "payloadBytesBefore": 776601,
+      "payloadBytesAfter": 367,
+      "queryFitBefore": {
+        "medianMs": 0.0235,
+        "p95Ms": 0.1298
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0058,
+        "p95Ms": 0.0062
+      },
+      "allocatedFeatureObjectsBefore": 2332,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "pushkin",
+      "radius": 250,
+      "consumed": 12000,
+      "residentBuildings": 0,
+      "residentChunks": 23,
+      "changedIds": 0,
+      "sourceCloneBefore": {
+        "medianMs": 0.0021,
+        "p95Ms": 0.0096
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0021,
+        "p95Ms": 0.0697
+      },
+      "payloadBytesBefore": 42,
+      "payloadBytesAfter": 13,
+      "queryFitBefore": {
+        "medianMs": 0.0017,
+        "p95Ms": 0.0021
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0016,
+        "p95Ms": 0.002
+      },
+      "allocatedFeatureObjectsBefore": 0,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "pushkin",
+      "radius": 500,
+      "consumed": 0,
+      "residentBuildings": 8411,
+      "residentChunks": 58,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 72.4563,
+        "p95Ms": 108.341
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0041,
+        "p95Ms": 0.1006
+      },
+      "payloadBytesBefore": 3028045,
+      "payloadBytesAfter": 377,
+      "queryFitBefore": {
+        "medianMs": 0.3549,
+        "p95Ms": 0.5944
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0723,
+        "p95Ms": 0.1519
+      },
+      "allocatedFeatureObjectsBefore": 8383,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "pushkin",
+      "radius": 500,
+      "consumed": 1000,
+      "residentBuildings": 8411,
+      "residentChunks": 58,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 69.9762,
+        "p95Ms": 112.8605
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0033,
+        "p95Ms": 0.0039
+      },
+      "payloadBytesBefore": 3028045,
+      "payloadBytesAfter": 377,
+      "queryFitBefore": {
+        "medianMs": 0.3171,
+        "p95Ms": 0.6683
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0629,
+        "p95Ms": 0.0933
+      },
+      "allocatedFeatureObjectsBefore": 8383,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "pushkin",
+      "radius": 500,
+      "consumed": 6000,
+      "residentBuildings": 5033,
+      "residentChunks": 58,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 31.4078,
+        "p95Ms": 52.4307
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0031,
+        "p95Ms": 0.0036
+      },
+      "payloadBytesBefore": 1721266,
+      "payloadBytesAfter": 361,
+      "queryFitBefore": {
+        "medianMs": 0.1258,
+        "p95Ms": 0.2626
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0295,
+        "p95Ms": 0.1194
+      },
+      "allocatedFeatureObjectsBefore": 5005,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "pushkin",
+      "radius": 500,
+      "consumed": 12000,
+      "residentBuildings": 0,
+      "residentChunks": 58,
+      "changedIds": 0,
+      "sourceCloneBefore": {
+        "medianMs": 0.0018,
+        "p95Ms": 0.0405
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0013,
+        "p95Ms": 0.0017
+      },
+      "payloadBytesBefore": 42,
+      "payloadBytesAfter": 13,
+      "queryFitBefore": {
+        "medianMs": 0.0053,
+        "p95Ms": 0.0061
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0045,
+        "p95Ms": 0.0048
+      },
+      "allocatedFeatureObjectsBefore": 0,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "gatchina",
+      "radius": 18,
+      "consumed": 0,
+      "residentBuildings": 1309,
+      "residentChunks": 4,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 10.6332,
+        "p95Ms": 14.8938
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0031,
+        "p95Ms": 0.0055
+      },
+      "payloadBytesBefore": 387402,
+      "payloadBytesAfter": 399,
+      "queryFitBefore": {
+        "medianMs": 0.0025,
+        "p95Ms": 0.0028
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0011,
+        "p95Ms": 0.0014
+      },
+      "allocatedFeatureObjectsBefore": 1281,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "gatchina",
+      "radius": 18,
+      "consumed": 1000,
+      "residentBuildings": 1309,
+      "residentChunks": 4,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 5.9032,
+        "p95Ms": 10.0242
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0032,
+        "p95Ms": 0.0051
+      },
+      "payloadBytesBefore": 387402,
+      "payloadBytesAfter": 399,
+      "queryFitBefore": {
+        "medianMs": 0.0024,
+        "p95Ms": 0.0031
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0011,
+        "p95Ms": 0.0014
+      },
+      "allocatedFeatureObjectsBefore": 1281,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "gatchina",
+      "radius": 18,
+      "consumed": 6000,
+      "residentBuildings": 1309,
+      "residentChunks": 4,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 6.2228,
+        "p95Ms": 15.0261
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0031,
+        "p95Ms": 0.005
+      },
+      "payloadBytesBefore": 387402,
+      "payloadBytesAfter": 399,
+      "queryFitBefore": {
+        "medianMs": 0.0024,
+        "p95Ms": 0.0029
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0009,
+        "p95Ms": 0.0009
+      },
+      "allocatedFeatureObjectsBefore": 1281,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "gatchina",
+      "radius": 18,
+      "consumed": 12000,
+      "residentBuildings": 0,
+      "residentChunks": 4,
+      "changedIds": 0,
+      "sourceCloneBefore": {
+        "medianMs": 0.0017,
+        "p95Ms": 0.0021
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0013,
+        "p95Ms": 0.0035
+      },
+      "payloadBytesBefore": 42,
+      "payloadBytesAfter": 13,
+      "queryFitBefore": {
+        "medianMs": 0.0008,
+        "p95Ms": 0.0013
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0005,
+        "p95Ms": 0.0007
+      },
+      "allocatedFeatureObjectsBefore": 0,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "gatchina",
+      "radius": 100,
+      "consumed": 0,
+      "residentBuildings": 2313,
+      "residentChunks": 8,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 11.3179,
+        "p95Ms": 16.9556
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0033,
+        "p95Ms": 0.0581
+      },
+      "payloadBytesBefore": 705075,
+      "payloadBytesAfter": 397,
+      "queryFitBefore": {
+        "medianMs": 0.0075,
+        "p95Ms": 0.022
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0017,
+        "p95Ms": 0.0022
+      },
+      "allocatedFeatureObjectsBefore": 2285,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "gatchina",
+      "radius": 100,
+      "consumed": 1000,
+      "residentBuildings": 2313,
+      "residentChunks": 8,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 23.5669,
+        "p95Ms": 204.8006
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0034,
+        "p95Ms": 0.0462
+      },
+      "payloadBytesBefore": 705075,
+      "payloadBytesAfter": 397,
+      "queryFitBefore": {
+        "medianMs": 0.0087,
+        "p95Ms": 0.0689
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0018,
+        "p95Ms": 0.0126
+      },
+      "allocatedFeatureObjectsBefore": 2285,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "gatchina",
+      "radius": 100,
+      "consumed": 6000,
+      "residentBuildings": 2313,
+      "residentChunks": 8,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 12.7049,
+        "p95Ms": 25.5635
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0033,
+        "p95Ms": 0.0039
+      },
+      "payloadBytesBefore": 705075,
+      "payloadBytesAfter": 397,
+      "queryFitBefore": {
+        "medianMs": 0.0082,
+        "p95Ms": 0.0145
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0017,
+        "p95Ms": 0.0029
+      },
+      "allocatedFeatureObjectsBefore": 2285,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "gatchina",
+      "radius": 100,
+      "consumed": 12000,
+      "residentBuildings": 0,
+      "residentChunks": 8,
+      "changedIds": 0,
+      "sourceCloneBefore": {
+        "medianMs": 0.0016,
+        "p95Ms": 0.0022
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0014,
+        "p95Ms": 0.0249
+      },
+      "payloadBytesBefore": 42,
+      "payloadBytesAfter": 13,
+      "queryFitBefore": {
+        "medianMs": 0.0011,
+        "p95Ms": 0.0021
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0005,
+        "p95Ms": 0.0008
+      },
+      "allocatedFeatureObjectsBefore": 0,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "gatchina",
+      "radius": 250,
+      "consumed": 0,
+      "residentBuildings": 4449,
+      "residentChunks": 23,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 25.7357,
+        "p95Ms": 101.2276
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0035,
+        "p95Ms": 0.1747
+      },
+      "payloadBytesBefore": 1316727,
+      "payloadBytesAfter": 404,
+      "queryFitBefore": {
+        "medianMs": 0.055,
+        "p95Ms": 0.1475
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0098,
+        "p95Ms": 0.0102
+      },
+      "allocatedFeatureObjectsBefore": 4421,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "gatchina",
+      "radius": 250,
+      "consumed": 1000,
+      "residentBuildings": 4449,
+      "residentChunks": 23,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 25.5085,
+        "p95Ms": 63.8252
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0033,
+        "p95Ms": 0.0543
+      },
+      "payloadBytesBefore": 1316727,
+      "payloadBytesAfter": 404,
+      "queryFitBefore": {
+        "medianMs": 0.0454,
+        "p95Ms": 0.0759
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0099,
+        "p95Ms": 0.0133
+      },
+      "allocatedFeatureObjectsBefore": 4421,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "gatchina",
+      "radius": 250,
+      "consumed": 6000,
+      "residentBuildings": 3817,
+      "residentChunks": 23,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 18.6736,
+        "p95Ms": 29.8169
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0031,
+        "p95Ms": 0.0034
+      },
+      "payloadBytesBefore": 1119907,
+      "payloadBytesAfter": 404,
+      "queryFitBefore": {
+        "medianMs": 0.0466,
+        "p95Ms": 0.0764
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0103,
+        "p95Ms": 0.0124
+      },
+      "allocatedFeatureObjectsBefore": 3789,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "gatchina",
+      "radius": 250,
+      "consumed": 12000,
+      "residentBuildings": 0,
+      "residentChunks": 23,
+      "changedIds": 0,
+      "sourceCloneBefore": {
+        "medianMs": 0.0017,
+        "p95Ms": 0.0021
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0013,
+        "p95Ms": 0.002
+      },
+      "payloadBytesBefore": 42,
+      "payloadBytesAfter": 13,
+      "queryFitBefore": {
+        "medianMs": 0.0018,
+        "p95Ms": 0.0036
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0014,
+        "p95Ms": 0.0018
+      },
+      "allocatedFeatureObjectsBefore": 0,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "gatchina",
+      "radius": 500,
+      "consumed": 0,
+      "residentBuildings": 7542,
+      "residentChunks": 52,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 45.1213,
+        "p95Ms": 124.4559
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.003,
+        "p95Ms": 0.0037
+      },
+      "payloadBytesBefore": 2190698,
+      "payloadBytesAfter": 379,
+      "queryFitBefore": {
+        "medianMs": 0.3608,
+        "p95Ms": 2.1549
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0606,
+        "p95Ms": 0.3368
+      },
+      "allocatedFeatureObjectsBefore": 7514,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "gatchina",
+      "radius": 500,
+      "consumed": 1000,
+      "residentBuildings": 7542,
+      "residentChunks": 52,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 39.6321,
+        "p95Ms": 57.2372
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.004,
+        "p95Ms": 0.0057
+      },
+      "payloadBytesBefore": 2190698,
+      "payloadBytesAfter": 379,
+      "queryFitBefore": {
+        "medianMs": 0.2789,
+        "p95Ms": 0.4694
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0505,
+        "p95Ms": 0.069
+      },
+      "allocatedFeatureObjectsBefore": 7514,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "gatchina",
+      "radius": 500,
+      "consumed": 6000,
+      "residentBuildings": 5378,
+      "residentChunks": 52,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 27.5649,
+        "p95Ms": 37.2276
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0032,
+        "p95Ms": 0.0038
+      },
+      "payloadBytesBefore": 1554203,
+      "payloadBytesAfter": 362,
+      "queryFitBefore": {
+        "medianMs": 0.2958,
+        "p95Ms": 0.4115
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0529,
+        "p95Ms": 0.071
+      },
+      "allocatedFeatureObjectsBefore": 5350,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "gatchina",
+      "radius": 500,
+      "consumed": 12000,
+      "residentBuildings": 0,
+      "residentChunks": 52,
+      "changedIds": 0,
+      "sourceCloneBefore": {
+        "medianMs": 0.0016,
+        "p95Ms": 0.0019
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0012,
+        "p95Ms": 0.003
+      },
+      "payloadBytesBefore": 42,
+      "payloadBytesAfter": 13,
+      "queryFitBefore": {
+        "medianMs": 0.0061,
+        "p95Ms": 0.0216
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0043,
+        "p95Ms": 0.0053
+      },
+      "allocatedFeatureObjectsBefore": 0,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "synthetic-20000",
+      "radius": 18,
+      "consumed": 0,
+      "residentBuildings": 4489,
+      "residentChunks": 4,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 51.0762,
+        "p95Ms": 81.1179
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0033,
+        "p95Ms": 0.004
+      },
+      "payloadBytesBefore": 3598441,
+      "payloadBytesAfter": 488,
+      "queryFitBefore": {
+        "medianMs": 0.0084,
+        "p95Ms": 0.0106
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0032,
+        "p95Ms": 0.0036
+      },
+      "allocatedFeatureObjectsBefore": 4461,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "synthetic-20000",
+      "radius": 18,
+      "consumed": 1000,
+      "residentBuildings": 4489,
+      "residentChunks": 4,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 48.0984,
+        "p95Ms": 67.5295
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0031,
+        "p95Ms": 0.0041
+      },
+      "payloadBytesBefore": 3598441,
+      "payloadBytesAfter": 488,
+      "queryFitBefore": {
+        "medianMs": 0.0085,
+        "p95Ms": 0.0136
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0031,
+        "p95Ms": 0.0035
+      },
+      "allocatedFeatureObjectsBefore": 4461,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "synthetic-20000",
+      "radius": 18,
+      "consumed": 6000,
+      "residentBuildings": 3618,
+      "residentChunks": 4,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 39.3868,
+        "p95Ms": 60.386
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0032,
+        "p95Ms": 0.0039
+      },
+      "payloadBytesBefore": 2896392,
+      "payloadBytesAfter": 488,
+      "queryFitBefore": {
+        "medianMs": 0.0084,
+        "p95Ms": 0.0099
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0037,
+        "p95Ms": 0.0041
+      },
+      "allocatedFeatureObjectsBefore": 3590,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "synthetic-20000",
+      "radius": 18,
+      "consumed": 12000,
+      "residentBuildings": 1608,
+      "residentChunks": 4,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 17.228,
+        "p95Ms": 27.0544
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0033,
+        "p95Ms": 0.0767
+      },
+      "payloadBytesBefore": 1277519,
+      "payloadBytesAfter": 516,
+      "queryFitBefore": {
+        "medianMs": 0.0007,
+        "p95Ms": 0.001
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0005,
+        "p95Ms": 0.0008
+      },
+      "allocatedFeatureObjectsBefore": 1580,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "synthetic-20000",
+      "radius": 100,
+      "consumed": 0,
+      "residentBuildings": 6700,
+      "residentChunks": 8,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 79.5035,
+        "p95Ms": 133.05
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0036,
+        "p95Ms": 0.0043
+      },
+      "payloadBytesBefore": 5383972,
+      "payloadBytesAfter": 432,
+      "queryFitBefore": {
+        "medianMs": 0.1653,
+        "p95Ms": 0.3021
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0115,
+        "p95Ms": 0.0193
+      },
+      "allocatedFeatureObjectsBefore": 6672,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "synthetic-20000",
+      "radius": 100,
+      "consumed": 1000,
+      "residentBuildings": 6365,
+      "residentChunks": 8,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 69.4016,
+        "p95Ms": 83.1693
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0035,
+        "p95Ms": 0.0043
+      },
+      "payloadBytesBefore": 5114477,
+      "payloadBytesAfter": 488,
+      "queryFitBefore": {
+        "medianMs": 0.0606,
+        "p95Ms": 0.0936
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0117,
+        "p95Ms": 0.013
+      },
+      "allocatedFeatureObjectsBefore": 6337,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "synthetic-20000",
+      "radius": 100,
+      "consumed": 6000,
+      "residentBuildings": 4690,
+      "residentChunks": 8,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 58.2793,
+        "p95Ms": 103.4225
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0035,
+        "p95Ms": 0.0049
+      },
+      "payloadBytesBefore": 3763534,
+      "payloadBytesAfter": 488,
+      "queryFitBefore": {
+        "medianMs": 0.0573,
+        "p95Ms": 0.0805
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0098,
+        "p95Ms": 0.0224
+      },
+      "allocatedFeatureObjectsBefore": 4662,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "synthetic-20000",
+      "radius": 100,
+      "consumed": 12000,
+      "residentBuildings": 2680,
+      "residentChunks": 8,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 28.1025,
+        "p95Ms": 42.1808
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0036,
+        "p95Ms": 0.0048
+      },
+      "payloadBytesBefore": 2144661,
+      "payloadBytesAfter": 516,
+      "queryFitBefore": {
+        "medianMs": 0.0006,
+        "p95Ms": 0.0008
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0005,
+        "p95Ms": 0.0008
+      },
+      "allocatedFeatureObjectsBefore": 2652,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "synthetic-20000",
+      "radius": 250,
+      "consumed": 0,
+      "residentBuildings": 13300,
+      "residentChunks": 16,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 179.2673,
+        "p95Ms": 269.2724
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0032,
+        "p95Ms": 0.0036
+      },
+      "payloadBytesBefore": 10725128,
+      "payloadBytesAfter": 432,
+      "queryFitBefore": {
+        "medianMs": 0.4735,
+        "p95Ms": 1.1681
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0683,
+        "p95Ms": 0.1052
+      },
+      "allocatedFeatureObjectsBefore": 13272,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "synthetic-20000",
+      "radius": 250,
+      "consumed": 1000,
+      "residentBuildings": 12635,
+      "residentChunks": 16,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 154.6675,
+        "p95Ms": 186.1291
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0032,
+        "p95Ms": 0.0038
+      },
+      "payloadBytesBefore": 10189415,
+      "payloadBytesAfter": 488,
+      "queryFitBefore": {
+        "medianMs": 0.3654,
+        "p95Ms": 0.6125
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0709,
+        "p95Ms": 0.1414
+      },
+      "allocatedFeatureObjectsBefore": 12607,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "synthetic-20000",
+      "radius": 250,
+      "consumed": 6000,
+      "residentBuildings": 9310,
+      "residentChunks": 16,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 116.3481,
+        "p95Ms": 432.6698
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0035,
+        "p95Ms": 0.0044
+      },
+      "payloadBytesBefore": 7504016,
+      "payloadBytesAfter": 488,
+      "queryFitBefore": {
+        "medianMs": 0.3993,
+        "p95Ms": 1.4828
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0677,
+        "p95Ms": 0.0901
+      },
+      "allocatedFeatureObjectsBefore": 9282,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "synthetic-20000",
+      "radius": 250,
+      "consumed": 12000,
+      "residentBuildings": 5320,
+      "residentChunks": 16,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 63.5366,
+        "p95Ms": 119.4607
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0033,
+        "p95Ms": 0.0041
+      },
+      "payloadBytesBefore": 4285789,
+      "payloadBytesAfter": 516,
+      "queryFitBefore": {
+        "medianMs": 0.0033,
+        "p95Ms": 0.0037
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0022,
+        "p95Ms": 0.0024
+      },
+      "allocatedFeatureObjectsBefore": 5292,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "synthetic-20000",
+      "radius": 500,
+      "consumed": 0,
+      "residentBuildings": 20000,
+      "residentChunks": 24,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 306.5982,
+        "p95Ms": 375.6132
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.003,
+        "p95Ms": 0.0038
+      },
+      "payloadBytesBefore": 16122449,
+      "payloadBytesAfter": 422,
+      "queryFitBefore": {
+        "medianMs": 1.7178,
+        "p95Ms": 3.1804
+      },
+      "queryFitAfter": {
+        "medianMs": 0.4371,
+        "p95Ms": 0.6121
+      },
+      "allocatedFeatureObjectsBefore": 19972,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "synthetic-20000",
+      "radius": 500,
+      "consumed": 1000,
+      "residentBuildings": 19000,
+      "residentChunks": 24,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 283.5749,
+        "p95Ms": 421.65
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0031,
+        "p95Ms": 0.0038
+      },
+      "payloadBytesBefore": 15317731,
+      "payloadBytesAfter": 488,
+      "queryFitBefore": {
+        "medianMs": 1.6146,
+        "p95Ms": 3.0592
+      },
+      "queryFitAfter": {
+        "medianMs": 0.556,
+        "p95Ms": 18.9834
+      },
+      "allocatedFeatureObjectsBefore": 18972,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "synthetic-20000",
+      "radius": 500,
+      "consumed": 6000,
+      "residentBuildings": 14000,
+      "residentChunks": 24,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 212.0578,
+        "p95Ms": 340.965
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0033,
+        "p95Ms": 0.0036
+      },
+      "payloadBytesBefore": 11283885,
+      "payloadBytesAfter": 488,
+      "queryFitBefore": {
+        "medianMs": 1.6276,
+        "p95Ms": 45.7744
+      },
+      "queryFitAfter": {
+        "medianMs": 0.5415,
+        "p95Ms": 1.0174
+      },
+      "allocatedFeatureObjectsBefore": 13972,
+      "allocatedFeatureObjectsAfter": 0
+    },
+    {
+      "dataset": "synthetic-20000",
+      "radius": 500,
+      "consumed": 12000,
+      "residentBuildings": 8000,
+      "residentChunks": 24,
+      "changedIds": 28,
+      "sourceCloneBefore": {
+        "medianMs": 109.7722,
+        "p95Ms": 138.5426
+      },
+      "sourceCloneAfter": {
+        "medianMs": 0.0033,
+        "p95Ms": 0.0037
+      },
+      "payloadBytesBefore": 6449545,
+      "payloadBytesAfter": 516,
+      "queryFitBefore": {
+        "medianMs": 0.2696,
+        "p95Ms": 0.4468
+      },
+      "queryFitAfter": {
+        "medianMs": 0.0511,
+        "p95Ms": 0.0774
+      },
+      "allocatedFeatureObjectsBefore": 7972,
+      "allocatedFeatureObjectsAfter": 0
+    }
+  ],
+  "checkpoints": [
+    {
+      "consumed": 0,
+      "batches": 120,
+      "beforeWrites": 120,
+      "afterWrites": 1,
+      "before": {
+        "medianMs": 0.4634,
+        "p95Ms": 0.8393
+      },
+      "after": {
+        "medianMs": 0.0232,
+        "p95Ms": 0.4542
+      }
+    },
+    {
+      "consumed": 1000,
+      "batches": 120,
+      "beforeWrites": 120,
+      "afterWrites": 1,
+      "before": {
+        "medianMs": 6.9046,
+        "p95Ms": 15.4675
+      },
+      "after": {
+        "medianMs": 0.062,
+        "p95Ms": 0.1913
+      }
+    },
+    {
+      "consumed": 6000,
+      "batches": 120,
+      "beforeWrites": 120,
+      "afterWrites": 1,
+      "before": {
+        "medianMs": 45.4953,
+        "p95Ms": 54.4361
+      },
+      "after": {
+        "medianMs": 0.3119,
+        "p95Ms": 0.4929
+      }
+    },
+    {
+      "consumed": 12000,
+      "batches": 120,
+      "beforeWrites": 120,
+      "afterWrites": 1,
+      "before": {
+        "medianMs": 220.8545,
+        "p95Ms": 245.5343
+      },
+      "after": {
+        "medianMs": 0.6763,
+        "p95Ms": 6.2358
+      }
+    },
+    {
+      "consumed": 100000,
+      "batches": 120,
+      "beforeWrites": 120,
+      "afterWrites": 1,
+      "before": {
+        "medianMs": 832.1719,
+        "p95Ms": 1219.6055
+      },
+      "after": {
+        "medianMs": 5.7761,
+        "p95Ms": 6.3777
+      }
+    }
+  ],
+  "animations": [
+    {
+      "dataset": "pushkin",
+      "buildings": 28,
+      "vertices": 3853,
+      "before": {
+        "medianMs": 0.7048,
+        "p95Ms": 0.9825
+      },
+      "after": {
+        "medianMs": 0.0337,
+        "p95Ms": 0.1989
+      },
+      "note": "Same vertices, cached offsets only; production also caps effects at 16 / 1400 vertices, or 6 / 400 low quality."
+    },
+    {
+      "dataset": "gatchina",
+      "buildings": 28,
+      "vertices": 1537,
+      "before": {
+        "medianMs": 0.2471,
+        "p95Ms": 0.5781
+      },
+      "after": {
+        "medianMs": 0.0803,
+        "p95Ms": 0.1697
+      },
+      "note": "Same vertices, cached offsets only; production also caps effects at 16 / 1400 vertices, or 6 / 400 low quality."
+    },
+    {
+      "dataset": "synthetic-20000",
+      "buildings": 28,
+      "vertices": 476,
+      "before": {
+        "medianMs": 0.0897,
+        "p95Ms": 0.1906
+      },
+      "after": {
+        "medianMs": 0.004,
+        "p95Ms": 0.0048
+      },
+      "note": "Same vertices, cached offsets only; production also caps effects at 16 / 1400 vertices, or 6 / 400 low quality."
+    }
+  ],
+  "sink": 3449750301194.149
+}

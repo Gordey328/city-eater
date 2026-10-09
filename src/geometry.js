@@ -203,10 +203,15 @@ export const requiredCircle = minimalEnclosingCircle;
 /** Every exterior vertex must fit; default tolerance gives a 6% gameplay margin. */
 export function polygonFitsCircle(polygons, holeCenter, holeRadius, tolerance = FIT_TOLERANCE) {
   if (!(holeRadius >= 0) || !(tolerance > 0)) return false;
-  const points = outerVertices(polygons);
-  if (!points.length) return false;
-  const allowed = holeRadius * tolerance;
-  return points.every((point) => distance(point, holeCenter) <= allowed + EPS);
+  const allowed = holeRadius * tolerance + EPS, allowedSquared = allowed * allowed;
+  let hasPoint = false;
+  for (const polygon of polygons || []) for (const point of polygon[0] || []) {
+    if (!validPoint(point)) continue;
+    hasPoint = true;
+    const dx = point[0] - holeCenter[0], dy = point[1] - holeCenter[1];
+    if (dx * dx + dy * dy > allowedSquared) return false;
+  }
+  return hasPoint;
 }
 
 function nearestPolygonBoundary(point, polygon) {
@@ -282,6 +287,7 @@ export class SpatialIndex {
     this.cellSize = cellSize;
     this.cells = new Map();
     this.items = new Map();
+    this.queryVersion = 0;
   }
   get size() { return this.items.size; }
   *keysFor(bbox) {
@@ -314,14 +320,23 @@ export class SpatialIndex {
     this.items.delete(key);
     return true;
   }
-  query(bbox) {
+  query(bbox, result = []) {
+    result.length = 0;
     bbox = normalizeBounds(bbox);
-    if (!validBounds(bbox)) return [];
-    const keys = new Set();
+    if (!validBounds(bbox)) return result;
+    const version = ++this.queryVersion;
     for (const cellKey of this.keysFor(bbox)) {
-      for (const key of this.cells.get(cellKey) || []) keys.add(key);
+      const cell = this.cells.get(cellKey);
+      if (!cell) continue;
+      for (const key of cell) {
+        const entry = this.items.get(key);
+        if (entry.queryVersion === version) continue;
+        entry.queryVersion = version;
+        const box = entry.bbox;
+        if (box.minX <= bbox.maxX && box.maxX >= bbox.minX && box.minY <= bbox.maxY && box.maxY >= bbox.minY) result.push(entry.item);
+      }
     }
-    return [...keys].map((key) => this.items.get(key)).filter((entry) => boundsIntersect(entry.bbox, bbox)).map((entry) => entry.item);
+    return result;
   }
   get(id) { return this.items.get(id)?.item; }
   values() { return [...this.items.values()].map((entry) => entry.item); }

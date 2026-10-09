@@ -1,6 +1,6 @@
 {
   "name": "city-eater",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "description": "A single-player city swallowing game built on real OpenStreetMap geometry",
@@ -10,18 +10,24 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "node --test tests/*.test.js",
     "test:browser": "playwright test",
-    "prebuild": "node scripts/write_build_info.mjs"
+    "prebuild": "node scripts/write_build_info.mjs",
+    "bench:absorption": "node scripts/benchmark_absorption.mjs"
   },
   "dependencies": {
     "@fontsource/manrope": "^5.3.0",
     "@fontsource/unbounded": "^5.3.0",
-    "maplibre-gl": "^5.20.2",
-    "pmtiles": "^4.3.2"
+    "maplibre-gl": "^6.13.0",
+    "osmtogeojson": "^3.0.0-beta.5",
+    "pmtiles": "^4.3.2",
+    "polygon-clipping": "^0.15.7"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.0",
     "fake-indexeddb": "^6.2.5",
     "vite": "^7.1.9"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "overrides": {
+    "@xmldom/xmldom": "0.9.12"
+  }
 }
