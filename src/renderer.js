@@ -2,6 +2,7 @@ import maplibregl from 'maplibre-gl';
 import {Protocol} from 'pmtiles';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import {localToLonLat} from './geometry.js';
+import {cameraMetrics} from './camera.js';
 const protocol=new Protocol();maplibregl.addProtocol('pmtiles',protocol.tile);
 const empty=()=>({type:'FeatureCollection',features:[]});
 export class MapRenderer {
@@ -11,7 +12,7 @@ export class MapRenderer {
     window.addEventListener('resize',()=>this.resize());this.resize();
   }
   resize(){this.width=innerWidth;this.height=innerHeight;const d=Math.min(devicePixelRatio||1,this.quality==='low'?1:2);this.canvas.width=this.width*d;this.canvas.height=this.height*d;this.canvas.style.width=`${this.width}px`;this.canvas.style.height=`${this.height}px`;this.ctx.setTransform(d,0,0,d,0,0);this.map?.resize();}
-  async load(manifest,base){
+  async load(manifest,base,run=null){
     this.manifest=manifest;this.ready=false;clearTimeout(this.dataTimer);this.dataTimer=null;this.pendingFeatures=null;this.map?.remove();
     const sources=manifest.sourceLayers || {roads:'roads',water:'water',parks:'parks'};
     const pmUrl=new URL(manifest.pmtiles||'map.pmtiles',base).href;
@@ -28,7 +29,7 @@ export class MapRenderer {
       {id:'building-edge',type:'line',source:'buildings',paint:{'line-color':'#61715d','line-width':1,'line-opacity':.8}},
       {id:'arena',type:'line',source:'bounds',paint:{'line-color':'#e2734b','line-width':3,'line-dasharray':[3,2]}}
     ]};
-    this.map=new maplibregl.Map({container:'map',style,center:localToLonLat(manifest.spawn||[0,0],manifest.center),zoom:16.5,minZoom:10,maxZoom:19,pitch:0,bearing:0,interactive:false,attributionControl:{compact:true},canvasContextAttributes:{antialias:true},fadeDuration:0});
+    this.map=new maplibregl.Map({container:'map',style,center:localToLonLat(run?.position||manifest.spawn||[0,0],manifest.center),zoom:cameraMetrics(run?.radius||manifest.initialRadius||18,this.width,this.height,manifest.center[1]).zoom,minZoom:10,maxZoom:19,pitch:0,bearing:0,interactive:false,attributionControl:{compact:true},canvasContextAttributes:{antialias:true},fadeDuration:0});
     this.map.on('error',event=>this.onError(event.error?.message||'Ошибка фоновой карты'));
     await new Promise((resolve,reject)=>{this.map.once('load',resolve);setTimeout(()=>{if(!this.map?.loaded())resolve();},12000);});
     this.ready=!!this.map.getSource('buildings');this.resize();
@@ -38,8 +39,7 @@ export class MapRenderer {
   setQuality(quality){this.quality=quality;this.resize();}
   camera(position,radius,dt=1/60,overview=false){
     if(!this.ready)return;
-    const h=Math.min(this.width,this.height),metersPerPixel=Math.max(.8,radius/(h*.14)), latitude=this.manifest.center[1]*Math.PI/180;
-    const targetZoom=Math.max(10.5,Math.min(18,Math.log2(156543.03392*Math.cos(latitude)/metersPerPixel)));
+    const targetZoom=cameraMetrics(radius,this.width,this.height,this.manifest.center[1]).zoom;
     const factor=1-Math.exp(-dt*5),current=this.map.getCenter(),target=localToLonLat(position,this.manifest.center);
     this.map.jumpTo({center:[current.lng+(target[0]-current.lng)*factor,current.lat+(target[1]-current.lat)*factor],zoom:this.map.getZoom()+(targetZoom-this.map.getZoom())*factor});
   }

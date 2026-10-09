@@ -1,14 +1,16 @@
 import {SpatialIndex} from './geometry.js';
+import {streamingExtent} from './camera.js';
 export class BuildingRepository {
   constructor(manifest,baseUrl,consumed,onChange=()=>{}) {
     this.manifest=manifest;this.baseUrl=baseUrl;this.consumed=consumed;this.onChange=onChange;
-    this.chunks=new Map();this.pending=new Map();this.buildings=new Map();this.index=new SpatialIndex(150);this.generation=0;this.disposed=false;this.errors=new Map();
+    this.viewport=[1024,768];this.chunks=new Map();this.pending=new Map();this.buildings=new Map();this.index=new SpatialIndex(150);this.generation=0;this.disposed=false;this.errors=new Map();
   }
+  setViewport(width,height){this.viewport=[Math.max(1,width),Math.max(1,height)];}
   required(position,radius,direction=[0,0]) {
-    const view=Math.max(750,radius*3.8), lead=Math.min(500,view*.4), p=[position[0]+direction[0]*lead,position[1]+direction[1]*lead];
+    const view=streamingExtent(radius,...this.viewport,this.manifest.center?.[1]??60), lead=Math.min(400,Math.max(view.x,view.y)*.2), bounds=[position[0]-view.x+Math.min(0,direction[0]*lead),position[1]-view.y+Math.min(0,direction[1]*lead),position[0]+view.x+Math.max(0,direction[0]*lead),position[1]+view.y+Math.max(0,direction[1]*lead)];
     return this.manifest.chunks.filter(c=>{
       const box=c.bbox || [-5000+c.x*this.manifest.chunkSize,-5000+c.y*this.manifest.chunkSize,-5000+(c.x+1)*this.manifest.chunkSize,-5000+(c.y+1)*this.manifest.chunkSize];
-      return box[0]<=p[0]+view && box[2]>=p[0]-view && box[1]<=p[1]+view && box[3]>=p[1]-view;
+      return box[0]<=bounds[2] && box[2]>=bounds[0] && box[1]<=bounds[3] && box[3]>=bounds[1];
     });
   }
   async update(position,radius,direction=[0,0]) {

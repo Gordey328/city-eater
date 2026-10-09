@@ -6,3 +6,32 @@
 #qa-panel{position:absolute;z-index:50;right:12px;bottom:20px;width:205px;background:#fcfff2ed;font:10px monospace;padding:10px;border-radius:9px;max-height:280px;overflow:auto;touch-action:pan-y}#qa-panel summary{cursor:pointer}#qa-panel small{display:block;font-size:9px;margin:8px 0;line-height:1.5}#qa-panel button{display:block;font:10px monospace;padding:7px;margin:4px 0;background:#dce9bf;border-radius:4px;width:100%}#qa-status{white-space:pre-wrap;font:9px monospace;line-height:1.5;margin:8px 0 0;overflow-wrap:anywhere}
 
 .startup-error{font-size:11px;line-height:1.65;color:#7b482b;background:#fbebdccc;border:1px solid #debea1;padding:12px 14px;border-radius:8px;margin:14px 0 0}
+.modal-screen{pointer-events:auto}
+.mobile-target,.mobile-radius,#stats-toggle{display:none}
+@media(max-width:700px){
+  body:is([data-state=playing],[data-state=paused],[data-state=result]) #topbar{inset:calc(10px + env(safe-area-inset-top)) 12px auto auto;padding:0;width:44px;height:44px}
+  body:is([data-state=playing],[data-state=paused],[data-state=result]) #topbar .brand{display:none}
+  body:is([data-state=playing],[data-state=paused],[data-state=result]) #pause{width:44px;height:44px;border-radius:12px;background:#fafbefed}
+  #hud{inset:calc(10px + env(safe-area-inset-top)) 64px auto 12px}
+  .progress-card{height:46px;min-height:0;padding:5px 8px 7px 12px;border-radius:12px;display:flex;align-items:center;gap:7px;position:relative;box-shadow:0 2px 12px #283c1110}
+  .progress-label,.hud-location{display:none}
+  .progress-number{font-size:17px;letter-spacing:-.8px;line-height:1;margin:0;white-space:nowrap;order:0}
+  .progress-number small{font-size:9px;margin-left:2px}
+  .mobile-target{display:block;font:8px monospace;color:#78856a;white-space:nowrap;order:1}
+  .mobile-target b{font-weight:400}
+  .mobile-radius{display:block;font-size:11px;font-weight:700;white-space:nowrap;margin-left:auto;order:2}
+  #stats-toggle{display:block;width:36px;min-width:36px;height:40px;background:transparent;font-size:12px;letter-spacing:1px;padding:0;order:3;color:#667953;border-radius:8px}
+  #stats-toggle[aria-expanded=true]{background:#e7edda}
+  .progress-track{position:absolute;left:12px;right:12px;bottom:4px;height:2px}
+  .stats-card{display:none;margin-top:5px;padding:11px 12px;gap:9px;width:calc(100% + 52px);box-shadow:0 2px 12px #283c1110}
+  body.stats-open .stats-card{display:grid}
+  .stats-card span{font-size:7px}.stats-card b{font-size:12px}
+  .arena-mini{right:16px;bottom:calc(30px + env(safe-area-inset-bottom));gap:0;opacity:.6}
+  .arena-mini>div,.arena-mini>small{display:none}.arena-mini .north{font-size:8px}
+  body.has-progress .controls-help{display:none}
+  .controls-help{left:14px;bottom:calc(28px + env(safe-area-inset-bottom));font-size:8px;opacity:.7}
+  #target-hint{bottom:calc(38px + env(safe-area-inset-bottom));font-size:8px;padding:6px 10px}
+  #network{top:calc(66px + env(safe-area-inset-top));font-size:9px}
+  body.stats-open #network{top:calc(123px + env(safe-area-inset-top))}
+}
+#layout-preview-warning{position:absolute;left:12px;bottom:12px;z-index:40;font:8px monospace;background:#ffffffe8;color:#7c5942;padding:8px;border-radius:5px;max-width:65%}
