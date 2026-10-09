@@ -1,0 +1,7 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {BuildingRepository} from '../src/repository.js';
+import {BALANCE} from '../src/state.js';
+const catalog=JSON.parse(fs.readFileSync(new URL('../public/data/catalog.json',import.meta.url)));
+for(const level of catalog.levels)test(`${level.id}: real packaged map integrity and bounded endgame streaming`,()=>{const base=new URL(`../public/data/${level.id}/`,import.meta.url),manifest=JSON.parse(fs.readFileSync(new URL('manifest.json',base)));assert.equal(manifest.arenaSize,10000);assert.equal(manifest.targetPercent,80);assert.ok(manifest.version);const ids=new Set();let area=0;for(const c of manifest.chunks){const chunk=JSON.parse(fs.readFileSync(new URL(c.url,base)));for(const b of chunk.buildings){assert.ok(/^[wr][0-9]+$/.test(b.id));assert.ok(!ids.has(b.id));ids.add(b.id);assert.ok(b.area>0&&b.radius>0);assert.ok(b.bbox[0]>=-5000&&b.bbox[1]>=-5000&&b.bbox[2]<=5000&&b.bbox[3]<=5000);area+=b.area;}}assert.equal(ids.size,manifest.buildingCount);assert.ok(Math.abs(area-manifest.totalBuildingArea)<.1);const bytes=fs.readFileSync(new URL(manifest.pmtiles,base));assert.equal(bytes.subarray(0,7).toString(),'PMTiles');const radius=Math.sqrt(18**2+BALANCE.growth*manifest.totalBuildingArea*.8),repo=new BuildingRepository(manifest,base,new Set());assert.ok(repo.required([0,0],radius).length<manifest.chunks.length*.65);assert.ok(repo.required(manifest.spawn,18).length<=9);});

@@ -1,0 +1,32 @@
+import {test,expect} from '@playwright/test';
+test('real OSM absorption, pause, IndexedDB reload, streamed return, result and next level',async({page})=>{
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.goto('/?test=1');await expect(page.locator('#play')).toBeEnabled();
+  await page.locator('#play').click();await expect(page.locator('#hud')).toBeVisible();
+  await page.locator('#qa-panel summary').click();await page.locator('[data-qa=nearest]').click();
+  await expect.poll(()=>page.evaluate(()=>window.__cityEater.snapshot().run.consumed.length)).toBeGreaterThan(0);
+  await page.locator('#pause').click();await expect(page.locator('#pause-screen')).toBeVisible();
+  const before=await page.evaluate(()=>window.__cityEater.snapshot().run);
+  await page.locator('[data-qa=save]').click();await page.reload();await expect(page.locator('#play')).toBeEnabled();
+  const restored=await page.evaluate(()=>window.__cityEater.snapshot().run);
+  expect(restored.consumed).toEqual(before.consumed);expect(restored.mass).toBe(before.mass);expect(restored.score).toBe(before.score);
+  await page.locator('#play').click();await page.locator('#qa-panel summary').click();await page.locator('[data-qa=stream]').click();
+  await expect(page.locator('#qa-status')).toContainText('Streamed away/back');
+  const after=await page.evaluate(()=>window.__cityEater.snapshot());
+  for(const id of before.consumed)expect(after.loadedIds).not.toContain(id);
+  await page.locator('[data-qa=goal]').click();await expect(page.locator('#result')).toBeVisible();
+  await expect(page.locator('#next-level')).toBeVisible();await page.locator('#next-level').click();
+  await expect.poll(()=>page.evaluate(()=>window.__cityEater.snapshot().run?.levelId)).toBe('gatchina');
+  await expect.poll(()=>page.evaluate(()=>window.__cityEater.snapshot().state)).toBe('playing');
+  const next=await page.evaluate(()=>window.__cityEater.snapshot().run);expect(next.mass).toBe(0);expect(next.radius).toBe(18);
+  expect(errors).toEqual([]);
+});
+test('portrait layout and floating joystick move the hole without page scrolling',async({page})=>{
+  await page.setViewportSize({width:390,height:844});await page.goto('/?test=1');await expect(page.locator('#play')).toBeEnabled();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBe(390);
+  await page.locator('#play').click();const before=await page.evaluate(()=>window.__cityEater.snapshot().run.position);
+  await page.mouse.move(120,650);await page.mouse.down();await page.mouse.move(165,650);await page.waitForTimeout(300);await page.mouse.up();
+  const after=await page.evaluate(()=>window.__cityEater.snapshot().run.position);expect(after[0]).toBeGreaterThan(before[0]);
+  expect(await page.evaluate(()=>window.scrollY)).toBe(0);await expect(page.locator('#joystick')).not.toBeVisible();
+  await page.keyboard.press('Escape');await expect(page.locator('#pause-screen')).toBeVisible();await page.locator('#resume').click();await expect(page.locator('#pause-screen')).not.toBeVisible();
+});
