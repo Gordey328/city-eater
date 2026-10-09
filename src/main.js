@@ -42,7 +42,7 @@ function renderLevels(){
 }
 async function fetchJSON(url){const response=await fetch(url);if(!response.ok)throw new Error(`HTTP ${response.status}: ${url}`);return response.json();}
 async function selectLevel(index,{restart=false,start=false}={}){
-  const token=++generation;levelIndex=index;state='loading';input.reset();showScreen('menu');renderLevels();$('#loading').classList.remove('hidden');$('#play').disabled=true;animations=[];repo?.dispose();
+  const token=++generation;levelIndex=index;state='loading';input.reset();showScreen('menu');renderLevels();$('#loading').classList.remove('hidden');$('#play').disabled=true;document.querySelector('#startup-error')?.remove();animations=[];repo?.dispose();
   try{
     const entry=catalog[index],manifestUrl=new URL(entry.manifest||`./${entry.id}/manifest.json`,new URL('./data/',location.href));
     const nextManifest=await fetchJSON(manifestUrl);if(token!==generation)return;
@@ -56,7 +56,7 @@ async function selectLevel(index,{restart=false,start=false}={}){
     renderer.setBuildings(repo.features());renderer.setRadius(run.radius);$('#hud-level').textContent=manifest.title;$('#target-value').textContent=manifest.targetPercent??manifest.target??80;
     state='menu';showScreen('menu');$('#play').disabled=false;$('#play').innerHTML=`${saved&&!run.completed?'Продолжить':'Поглотить город'} <span class="button-arrow">↗</span>`;
     updateHUD();await saves.selectLevel(manifest.id).catch(()=>{});if(restart)await persist();if(start)await play();
-  }catch(error){console.error(error);state='menu';showScreen('menu');$('#play').disabled=false;$('#play').innerHTML='Повторить загрузку <span>↻</span>';toast('Город не загрузился. Проверь соединение и повтори попытку.',true);repo=null;}
+  }catch(error){console.error(error);state='menu';showScreen('menu');const webgl=/webgl|graphics context|initialize.*gl/i.test(error.message||'');$('#play').disabled=webgl;$('#play').innerHTML=webgl?'WebGL недоступен':'Повторить загрузку <span>↻</span>';if(webgl){const note=document.createElement('p');note.id='startup-error';note.className='startup-error';note.setAttribute('role','alert');note.textContent='В этом браузере отключена или недоступна 3D-графика WebGL. Для карты нужен WebGL 2. Открой игру в другом современном браузере или на устройстве, где WebGL доступен.';$('.menu-actions').append(note);}else toast('Город не загрузился. Проверь соединение и повтори попытку.',true);repo=null;}
   finally{if(token===generation)$('#loading').classList.add('hidden');}
 }
 async function play(){if(!repo||!renderer.ready){await selectLevel(levelIndex,{start:true});return;}if(run.completed){await selectLevel(levelIndex,{restart:true,start:true});return;}audio.unlock();state='playing';input.reset();showScreen(null);lastTime=performance.now();$('#pause').focus({preventScroll:true});}
