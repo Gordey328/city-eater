@@ -1,0 +1,111 @@
+{
+  "kind": "Node CPU microbenchmark, not network/GPU/mobile FPS",
+  "node": "v24.19.0",
+  "date": "2026-10-09T15:48:10.165Z",
+  "coverage": "Fully occupied synthetic stress mask; never shipped as gameplay data",
+  "samples": 50,
+  "scan": [
+    {
+      "radius": 18,
+      "historyChunks": 0,
+      "historyBytes": 0,
+      "medianMs": 0.032151999999996406,
+      "p95Ms": 0.1694750000000056,
+      "maxWords": 36
+    },
+    {
+      "radius": 18,
+      "historyChunks": 100,
+      "historyBytes": 819200,
+      "medianMs": 0.033809000000019296,
+      "p95Ms": 0.12489700000000425,
+      "maxWords": 36
+    },
+    {
+      "radius": 18,
+      "historyChunks": 400,
+      "historyBytes": 3276800,
+      "medianMs": 0.04130899999995563,
+      "p95Ms": 0.20515599999998813,
+      "maxWords": 36
+    },
+    {
+      "radius": 100,
+      "historyChunks": 0,
+      "historyBytes": 0,
+      "medianMs": 0.0508719999997993,
+      "p95Ms": 0.25643300000001545,
+      "maxWords": 356
+    },
+    {
+      "radius": 100,
+      "historyChunks": 100,
+      "historyBytes": 819200,
+      "medianMs": 0.02342399999997724,
+      "p95Ms": 0.1099659999999858,
+      "maxWords": 356
+    },
+    {
+      "radius": 100,
+      "historyChunks": 400,
+      "historyBytes": 3276800,
+      "medianMs": 0.021036999999978434,
+      "p95Ms": 0.028857000000243715,
+      "maxWords": 356
+    },
+    {
+      "radius": 500,
+      "historyChunks": 0,
+      "historyBytes": 0,
+      "medianMs": 0.16899000000012165,
+      "p95Ms": 0.5984040000003006,
+      "maxWords": 6613
+    },
+    {
+      "radius": 500,
+      "historyChunks": 100,
+      "historyBytes": 819200,
+      "medianMs": 0.1596279999998842,
+      "p95Ms": 0.3626320000003034,
+      "maxWords": 6613
+    },
+    {
+      "radius": 500,
+      "historyChunks": 400,
+      "historyBytes": 3276800,
+      "medianMs": 0.08803500000021813,
+      "p95Ms": 0.4427780000000894,
+      "maxWords": 6613
+    }
+  ],
+  "bitmapUpdate": [
+    {
+      "historyChunks": 0,
+      "residentChunks": 1,
+      "dirtyChunks": 1,
+      "medianMs": 0.40810899999996764,
+      "p95Ms": 1.9304560000000492
+    },
+    {
+      "historyChunks": 100,
+      "residentChunks": 1,
+      "dirtyChunks": 1,
+      "medianMs": 0.38340299999981653,
+      "p95Ms": 0.6452799999997296
+    },
+    {
+      "historyChunks": 400,
+      "residentChunks": 1,
+      "dirtyChunks": 1,
+      "medianMs": 0.3822300000001633,
+      "p95Ms": 0.9138109999994413
+    }
+  ],
+  "limits": {
+    "cellMeters": 2,
+    "maxRadiusMeters": 500,
+    "totalConsumedBytesIncludingPadding": 3276800,
+    "residentCoverageBytes": 294912,
+    "residentBitmapBytes": 9437184
+  }
+}

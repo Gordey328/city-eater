@@ -4,7 +4,9 @@ import * as maplibre from 'maplibre-gl';
 import {validateStyleMin} from '@maplibre/maplibre-gl-style-spec';
 import {GeoJSONVT} from '@maplibre/geojson-vt';
 import {createMapStyle} from '../src/map-style.js';
+import {streamMapStyle} from '../src/stream-map-style.js';
 const manifest={center:[30,60],spawn:[0,0],pmtiles:'map.pmtiles'};
+for(const buildings of [true,false])test(`installed MapLibre validates streamed ${buildings?'overview':'mask gameplay'} style`,()=>{const style=streamMapStyle({tiles:['https://tiles.openfreemap.org/planet/fixture/{z}/{x}/{y}.pbf'],maxzoom:14},{manifest,buildings});assert.deepEqual(validateStyleMin(style).map(e=>e.message),[]);assert.equal(style.layers.some(layer=>layer.id==='world-buildings'),buildings);});
 for(const imported of [false,true])test(`installed MapLibre validates ${imported?'imported GeoJSON':'prepared PMTiles'} style`,()=>{
   const m=imported?{...manifest,background:{type:'geojson',data:{type:'FeatureCollection',features:[]}}}:manifest;
   const style=createMapStyle(m,'https://example.invalid/data/');assert.deepEqual(validateStyleMin(style).map(e=>e.message),[]);

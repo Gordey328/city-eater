@@ -4,6 +4,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import {cameraMetrics} from './camera.js';
 import {prepareAnimationGeometry} from './animation-geometry.js';
 import {createMapStyle,mapCoordinates} from './map-style.js';
+import {streamMapStyle} from './stream-map-style.js';
 const protocol=new Protocol();maplibregl.addProtocol('pmtiles',protocol.tile);
 export class MapRenderer {
   constructor(onError){
@@ -16,13 +17,13 @@ export class MapRenderer {
   async load(manifest,base,run=null){
     const generation=(this.loadGeneration||0)+1;this.loadGeneration=generation;this.cancelLoad?.();
     this.manifest=manifest;this.ready=false;clearTimeout(this.dataTimer);this.dataTimer=null;this.pendingFeatures=null;this.pendingRepository=null;this.lastRadius=null;this.map?.remove();this.map=null;
-    const style=createMapStyle(manifest,base);
-    this.map=new maplibregl.Map({container:'map',style,center:mapCoordinates(run?.position||manifest.spawn||[0,0],manifest),zoom:cameraMetrics(run?.radius||manifest.initialRadius||18,this.width,this.height,manifest.projectionLatitude===undefined?manifest.center[1]:mapCoordinates(run?.position||manifest.spawn||[0,0],manifest)[1],manifest.projectionLatitude).zoom,minZoom:0,maxZoom:19,pitch:0,bearing:0,interactive:false,attributionControl:{compact:true},canvasContextAttributes:{antialias:true},fadeDuration:0});
+    const style=manifest.mode==='tile-mask-v1'?streamMapStyle(manifest.tileMetadata,{manifest,buildings:false}):createMapStyle(manifest,base);
+    this.map=new maplibregl.Map({container:'map',style,center:mapCoordinates(run?.position||manifest.spawn||[0,0],manifest),zoom:cameraMetrics(run?.radius||manifest.initialRadius||18,this.width,this.height,manifest.projectionLatitude===undefined?manifest.center[1]:mapCoordinates(run?.position||manifest.spawn||[0,0],manifest)[1],manifest.projectionLatitude).zoom,minZoom:0,maxZoom:19,pitch:0,bearing:0,interactive:false,maxTileCacheSize:64,attributionControl:{compact:true},canvasContextAttributes:{antialias:true},fadeDuration:0});
     const map=this.map;
     map.on('error',event=>{if(this.map===map)this.onError(event.error?.message||'Ошибка фоновой карты');});
     await new Promise(resolve=>{
-      let timer;const finish=()=>{clearTimeout(timer);map.off('load',finish);resolve();};
-      this.cancelLoad=finish;map.once('load',finish);timer=setTimeout(finish,12000);
+      let timer;const event=manifest.mode==='tile-mask-v1'?'style.load':'load';const finish=()=>{clearTimeout(timer);map.off(event,finish);resolve();};
+      this.cancelLoad=finish;map.once(event,finish);timer=setTimeout(finish,12000);
     });
     if(generation!==this.loadGeneration)return;
     this.cancelLoad=null;this.ready=!!map.getSource('buildings');this.resize();
@@ -43,7 +44,7 @@ export class MapRenderer {
   }
   // For explicit diagnostics only. Gameplay uses incremental syncBuildings.
   setBuildings(features){if(this.ready){const update=this.map.getSource('buildings')?.setData(features);update?.catch?.(error=>this.onError(error.message||'Не удалось обновить здания'));}}
-  setRadius(radius){if(!this.ready||radius===this.lastRadius)return;this.lastRadius=radius;this.map.setPaintProperty('buildings','fill-color',['case',['<=',['get','radius'],radius*1.06],'#b7cf66','#82927f']);this.map.setPaintProperty('building-edge','line-color',['case',['<=',['get','radius'],radius*1.06],'#798c3d','#61715d']);}
+  setRadius(radius){if(!this.ready||radius===this.lastRadius)return;this.lastRadius=radius;if(this.manifest.mode==='tile-mask-v1')return;this.map.setPaintProperty('buildings','fill-color',['case',['<=',['get','radius'],radius*1.06],'#b7cf66','#82927f']);this.map.setPaintProperty('building-edge','line-color',['case',['<=',['get','radius'],radius*1.06],'#798c3d','#61715d']);}
   setQuality(quality){this.quality=quality;this.resize();}
   camera(position,radius,dt=1/60,overview=false){
     if(!this.ready)return;
@@ -56,6 +57,7 @@ export class MapRenderer {
   project(position){const p=this.map.project(mapCoordinates(position,this.manifest,this.map.getCenter().lng));return [p.x,p.y];}
   render(run,animations,now,direction=[0,0]){
     const c=this.ctx,w=this.width,h=this.height;c.clearRect(0,0,w,h);if(!this.ready||!run)return;
+    this.maskDisplay?.draw(this);
     const p=this.project(run.position),edge=this.project([run.position[0]+run.radius,run.position[1]]),r=Math.max(5,edge[0]-p[0]);
     // Imported city sectors share x units; Mercator y scale still varies by row.
     const ry=this.manifest.projectionLatitude===undefined?r:Math.max(5,Math.max(Math.abs(this.project([run.position[0],run.position[1]+run.radius])[1]-p[1]),Math.abs(this.project([run.position[0],run.position[1]-run.radius])[1]-p[1])));

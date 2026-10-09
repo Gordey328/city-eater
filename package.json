@@ -1,6 +1,6 @@
 {
   "name": "city-eater",
-  "version": "0.7.2",
+  "version": "0.8.0-preview.1",
   "private": true,
   "type": "module",
   "description": "A single-player city swallowing game built on real OpenStreetMap geometry",
@@ -12,7 +12,9 @@
     "test:browser": "playwright test",
     "prebuild": "node scripts/write_build_info.mjs",
     "bench:absorption": "node scripts/benchmark_absorption.mjs",
-    "test:entry": "node --test tests/entry-cancellation.test.js tests/map-explorer.test.js tests/sector-loading.test.js tests/city-cache.test.js tests/overview-gestures.test.js"
+    "test:entry": "node --test tests/entry-cancellation.test.js tests/map-explorer.test.js tests/sector-loading.test.js tests/city-cache.test.js tests/overview-gestures.test.js",
+    "test:stream": "node --test tests/consumption-mask.test.js tests/tile-stream.test.js tests/streaming-state.test.js tests/streaming-game.test.js tests/mask-display.test.js tests/stream-entry.test.js",
+    "bench:mask": "node scripts/benchmark_mask.mjs design/mask-benchmark.json"
   },
   "dependencies": {
     "@fontsource/manrope": "^5.3.0",
@@ -20,12 +22,16 @@
     "maplibre-gl": "^6.13.0",
     "osmtogeojson": "^3.0.0-beta.5",
     "pmtiles": "^4.3.2",
-    "polygon-clipping": "^0.15.7"
+    "polygon-clipping": "^0.15.7",
+    "@mapbox/vector-tile": "3.0.0",
+    "pbf": "5.1.2"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.0",
     "fake-indexeddb": "^6.2.5",
-    "vite": "^7.1.9"
+    "vite": "^7.1.9",
+    "@maplibre/vt-pbf": "4.3.2",
+    "@maplibre/geojson-vt": "6.1.2"
   },
   "license": "MIT",
   "overrides": {
