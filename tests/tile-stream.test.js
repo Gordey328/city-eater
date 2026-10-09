@@ -42,6 +42,7 @@ test('metadata requires confirmed native14 and the documented host, no source ro
   const attribution=validateTileMetadata({...metadata,attribution:'<script>untrusted</script>'}).attribution;
   assert.match(attribution,/href="https:\/\/www\.openstreetmap\.org\/copyright"/);
   assert.match(attribution,/href="https:\/\/openfreemap\.org\/"/);
+  assert.match(attribution,/href="https:\/\/www\.openmaptiles\.org\/"/);
   assert.doesNotMatch(attribution,/untrusted|script/);
   for (const change of [{maxzoom:13},{maxzoom:15},{maxzoom:'14'},{tiles:['https://evil.invalid/planet/{z}/{x}/{y}.pbf']},{tiles:['http://tiles.openfreemap.org/planet/{z}/{x}/{y}.pbf']},{vector_layers:[{id:'water'}]},{tiles:[]}]) assert.throws(() => validateTileMetadata({...metadata,...change}));
 });

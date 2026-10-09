@@ -24,6 +24,7 @@ import {summarizeCampaign} from './city-campaign.js';
 import {StreamingGame} from './streaming-game.js';
 import {StreamStore} from './stream-store.js';
 import {STREAM_MODE,STREAM_RADIUS_CAP,createStreamRun,rewardStreamArea} from './streaming-state.js';
+import {previewEntryErrorMessage} from './renderer-readiness.js';
 const streamPreview=new URLSearchParams(location.search).get('stream')==='1';
 const $=s=>document.querySelector(s);
 const icon={pause:'<span class="pause-icon"><i></i><i></i></span>',play:'<span>↗</span>',sound:'♪',arrow:'↗'};
@@ -78,7 +79,7 @@ function updateStreamHUD(){
   $('#target-hint').textContent=run.radiusCapped?'Радиус 500 м · площадь и очки растут':run.consumedArea<100?'Поглощай части зданий · точность 2 м':'';
 }
 async function selectStreamedLevel(index,{entryPoint=null,restart=false}={}){
-  const token=++generation;state='map-loading';input.reset();await persist();if(token!==generation)return;
+  const token=++generation,entryStarted=performance.now();state='map-loading';input.reset();await persist();if(token!==generation)return;
   streamGame?.dispose();repo?.dispose();repo=null;renderer.dispose();renderer.maskDisplay=null;absorption.reset();animations=[];showScreen(null);levelIndex=index;
   const sector=catalog[index];const game=new StreamingGame({sector,store:streamStore,onStatus:(text,detail)=>{if(token!==generation)return;if(state==='map-loading')mapExplorer.setLoading(text,detail);else if(detail?.phase==='save-error')toast(text,true);else if(detail?.phase==='error'){$('#network').textContent='Нет данных впереди · пауза → продолжить для повтора';}},onMilestone:value=>toast(`Цель достигнута: ${num(value.consumedArea)} м². Следующая — ${num(value.targetArea)} м².`)});streamGame=game;
   try{
@@ -86,11 +87,12 @@ async function selectStreamedLevel(index,{entryPoint=null,restart=false}={}){
     const nextRun=await game.prepare(point,{restart});if(token!==generation)return;
     const nextManifest={...sector,id:sector.id,title:activeCampaign?.title||sector.title,mode:STREAM_MODE,initialRadius:18,tileMetadata:game.stream.metadata};
     manifest=nextManifest;run=nextRun;simulationTime=run.elapsed*1000;renderer.maskDisplay=game.display;
-    await renderer.load(manifest,new URL('./',location.href),run);if(token!==generation)return;
+    mapExplorer.setLoading('Рисуем дороги, воду и парки…',{phase:'renderer'});
+    await renderer.load(manifest,new URL('./',location.href),run,{tileSource:game.stream.source});if(token!==generation)return;if(!renderer.ready)throw new Error('Графическая карта не готова. Повтори загрузку.');
     updateStreamHUD();await game.persist();if(token!==generation)return;
     if(mapExplorer.busy){await mapExplorer.finishEntry({isCurrent:()=>token===generation});if(token!==generation)return;}
-    state='playing';showScreen(null);input.reset();lastTime=performance.now();toast('Потоковый предпросмотр · части зданий · радиус до 500 м',true);if(document.hidden)pause();
-  }catch(error){if(token!==generation)return;console.error(error);game.dispose();streamGame=null;renderer.maskDisplay=null;renderer.dispose();state='map';showScreen(null);run=null;manifest=null;if(mapExplorer.element.classList.contains('hidden')){const returning=generation+1;await openMap();if(generation!==returning)return;}mapExplorer.cancelSelection(error.name==='AbortError'?'Загрузка отменена.':error.message);}
+    game.entryMilliseconds=performance.now()-entryStarted;state='playing';showScreen(null);input.reset();lastTime=performance.now();toast('Потоковый предпросмотр · части зданий · радиус до 500 м',true);if(document.hidden)pause();
+  }catch(error){if(token!==generation)return;console.error(error);game.dispose();streamGame=null;renderer.maskDisplay=null;renderer.dispose();state='map';showScreen(null);run=null;manifest=null;if(mapExplorer.element.classList.contains('hidden')){const returning=generation+1;await openMap();if(generation!==returning)return;}mapExplorer.cancelSelection(previewEntryErrorMessage(error));}
 }
 
 async function selectLevel(index,{restart=false,start=false,fromMap=false,entryPoint=null}={}){
@@ -128,7 +130,7 @@ async function complete(){if(completing)return;const completedRun=run,completedM
   updateNextButton();renderLevels();
 }
 function tick(now){const rawDelta=Math.max(0,(now-lastTime)/1000),dt=Math.min(.04,rawDelta);lastTime=now;fpsSamples.push(rawDelta);if(fpsSamples.length>60)fpsSamples.shift();
-  if(state==='playing'&&streamGame){const direction=input.direction(),result=streamGame.tick(dt,now,direction);simulationTime+=dt*1000;$('#network').classList.toggle('hidden',!result.blocked);if(!streamGame.lastError)$('#network').textContent='Подгружаем здания впереди…';if(result.area)audio.absorb(run.radius);renderer.camera(run.position,run.radius,dt);renderer.render(run,[],simulationTime,direction);}
+  if(state==='playing'&&streamGame){const frameStarted=performance.now();const direction=input.direction(),result=streamGame.tick(dt,now,direction);simulationTime+=dt*1000;$('#network').classList.toggle('hidden',!result.blocked);if(!streamGame.lastError)$('#network').textContent='Подгружаем здания впереди…';if(result.area)audio.absorb(run.radius);renderer.camera(run.position,run.radius,dt);renderer.render(run,[],simulationTime,direction);const frameMs=performance.now()-frameStarted;streamGame.frameSamples??=[];streamGame.frameSamples.push(frameMs);if(streamGame.frameSamples.length>120)streamGame.frameSamples.shift();}
   else if(state==='playing'&&run&&repo){simulationTime+=dt*1000;run.elapsed+=dt;const direction=input.direction();
     const speed=95+Math.min(1400,run.radius*.75),delta=[direction[0]*speed*dt,direction[1]*speed*dt];
     const proposed=[run.position[0]+delta[0],run.position[1]+delta[1]];
@@ -143,7 +145,7 @@ function tick(now){const rawDelta=Math.max(0,(now-lastTime)/1000),dt=Math.min(.0
     if(now-lastSave>2000){lastSave=now;checkpoints.request(run);}
     renderer.camera(run.position,run.radius,dt);renderer.render(run,animations,simulationTime,direction);
   }else if(run&&renderer.ready&&!['map','map-loading','city-picker'].includes(state)){if(state==='menu')renderer.camera(run.position,run.radius,dt);renderer.render(run,animations,simulationTime);}
-  if(now-lastUI>120){lastUI=now;updateHUD();if($('#qa-city-metrics'))$('#qa-city-metrics').textContent=streamGame?`Tile requests: ${streamGame.stream.stats.requests} | bytes: ${streamGame.stream.stats.bytes} | known: ${streamGame.mask.coverage.size} | area: ${streamGame.run.consumedArea} m²`:`OSM requests: ${osmClient.requestCount} | cached: ${sectorLoader.stats.cacheHits} | imported: ${sectorLoader.stats.imports}`;if(new URLSearchParams(location.search).has('test'))$('#fps').textContent=`${Math.round(fpsSamples.length/(fpsSamples.reduce((a,b)=>a+b,0)||1))} fps | ${repo?.buildings.size||0} objects | ${repo?.chunks.size||0} chunks`;}
+  if(now-lastUI>120){lastUI=now;updateHUD();if($('#qa-city-metrics'))$('#qa-city-metrics').textContent=streamGame?JSON.stringify({state,renderer:renderer.type,entryMs:Math.round(streamGame.entryMilliseconds||0),gameplayAndBackgroundSource:streamGame.stream.source?.stats,overviewSource:mapExplorer.tileSource?.stats||mapExplorer.lastSourceStats,visual:renderer.map?.stats,frameCpuMs:streamGame.frameSamples?.length?{mean:streamGame.frameSamples.reduce((a,b)=>a+b,0)/streamGame.frameSamples.length,max:Math.max(...streamGame.frameSamples)}:null,knownChunks:streamGame.mask.coverage.size,area:streamGame.run.consumedArea,radius:streamGame.run.radius,position:streamGame.run.position,save:streamGame.saveStatus,savedAt:streamGame.savedAt}):`OSM requests: ${osmClient.requestCount} | cached: ${sectorLoader.stats.cacheHits} | imported: ${sectorLoader.stats.imports}`;if(new URLSearchParams(location.search).has('test'))$('#fps').textContent=`${Math.round(fpsSamples.length/(fpsSamples.reduce((a,b)=>a+b,0)||1))} fps | ${repo?.buildings.size||0} objects | ${repo?.chunks.size||0} chunks`;}
   requestAnimationFrame(tick);
 }
 $('#stats-toggle').onclick=()=>{const open=document.body.classList.toggle('stats-open');$('#stats-toggle').setAttribute('aria-expanded',String(open));$('#stats-toggle').setAttribute('aria-label',open?'Скрыть показатели':'Показать показатели');};
@@ -176,7 +178,7 @@ applySettings();state='map';showScreen(null);requestAnimationFrame(tick);
 // Explicit query-gated diagnostics, useful for verifying real-data persistence and geometry.
 if(new URLSearchParams(location.search).has('test')){window.__cityEater={snapshot:()=>({state,levelIndex,manifest,stream:streamGame?{stats:streamGame.stream.stats,sourceStats:streamGame.stream.source?.stats,coverage:streamGame.mask.coverage.size,consumedCells:streamGame.mask.consumedCells}:null,run:run?(run.mode===STREAM_MODE?{...run}:serializeRun(run)):null,loadedIds:repo?[...repo.buildings.keys()]:[],chunks:repo?[...repo.chunks.keys()]:[],animations:animations.length}),get game(){return{run,repo,manifest,renderer,streamGame};},pause,resume,persist,selectLevel,play,async moveTo(position){if(!run)return;run.position=position;await repo.update(position,run.radius);renderer.camera(position,run.radius,10);renderer.syncBuildings(repo);},async absorb(id){const b=repo.buildings.get(id);if(b&&consumeBuilding(run,b,manifest)){repo.consume(id);renderer.syncBuildings(repo);renderer.setRadius(run.radius);await persist();return true;}return false;}};$('#fps').classList.remove('hidden');}
 if(new URLSearchParams(location.search).has('test')){
-  const panel=document.createElement('details');panel.id='qa-panel';panel.className='panel';panel.innerHTML='<summary>QA controls</summary><small>Test mode changes this browser’s progress using real OSM IDs.</small><button data-qa="nearest">Nearest edible</button><button data-qa="stream">Stream away / back</button><button data-qa="save">Save checkpoint</button><button data-qa="goal">Reach goal (real IDs)</button><output id="qa-city-metrics">OSM requests: 0 | cached: 0 | imported: 0</output><pre id="qa-status">Ready</pre>';$('#app').append(panel);
+  const panel=document.createElement('details');panel.id='qa-panel';panel.className='panel';panel.innerHTML='<summary>QA controls</summary><small>Test mode changes this browser’s progress using real OSM IDs.</small><button data-qa="nearest">Nearest edible</button><button data-qa="stream">Stream away / back</button><button data-qa="save">Save checkpoint</button><button data-qa="goal">Reach goal (real IDs)</button><output id="qa-city-metrics">OSM requests: 0 | cached: 0 | imported: 0</output><pre id="qa-status">Ready</pre>';$('#app').append(panel);if(streamPreview){panel.querySelector('summary').textContent='Диагностика · только чтение';panel.querySelector('small').textContent='Реальные данные и состояние текущего запуска';panel.querySelectorAll('button').forEach(button=>button.remove());panel.querySelector('#qa-city-metrics').classList.add('stream-diagnostics');}
   panel.addEventListener('click',async event=>{const action=event.target.dataset.qa;if(!action||!run||!repo)return;const button=event.target;button.disabled=true;const status=$('#qa-status');try{
     if(action==='nearest'){const b=[...repo.buildings.values()].filter(b=>b.radius<=run.radius*1.06).sort((a,b)=>Math.hypot(a.center[0]-run.position[0],a.center[1]-run.position[1])-Math.hypot(b.center[0]-run.position[0],b.center[1]-run.position[1]))[0];if(!b)throw new Error('No edible building loaded');await window.__cityEater.moveTo([...b.center]);if(state==='paused')resume();if(state==='menu')await play();status.textContent=`Target ${b.id}, ${b.area} m²`;}
     if(action==='stream'){const p=[...run.position],s=state;if(s==='playing')pause();await window.__cityEater.moveTo([-4200,-4200]);await window.__cityEater.moveTo(p);if(s==='playing')resume();status.textContent=`Streamed away/back. Consumed: ${run.consumed.size}. Loaded: ${repo.buildings.size}`;}
