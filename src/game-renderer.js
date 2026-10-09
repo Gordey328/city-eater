@@ -1,0 +1,24 @@
+import {CanvasTileMap} from './canvas-tile-map.js';
+import {cameraMetrics} from './camera.js';
+import {localToLonLat} from './geometry.js';
+import {canvasPixelRatio} from './canvas-budget.js';
+import {ARENA_HALF_METRES as HALF} from './game-config.js';
+/** Canonical production renderer: real tile bitmaps + remaining building mask. */
+export class GameRenderer {
+  constructor(onError=()=>{}){this.onError=onError;this.canvas=document.querySelector('#effects');this.ctx=this.canvas.getContext('2d');this.quality='high';this.ready=false;this.type='canvas2d';this.generation=0;window.addEventListener('resize',()=>this.resize());this.resize();}
+  resize(){this.width=innerWidth;this.height=innerHeight;const d=canvasPixelRatio(this.width,this.height,devicePixelRatio||1,this.quality);this.canvas.width=this.width*d;this.canvas.height=this.height*d;this.canvas.style.width=`${this.width}px`;this.canvas.style.height=`${this.height}px`;this.ctx.setTransform(d,0,0,d,0,0);this.map?.resize();}
+  coordinate(p){return localToLonLat(p,this.manifest.center,this.manifest.projectionLatitude);}
+  async load(manifest,run,source){this.dispose();const generation=this.generation;this.manifest=manifest;const center=this.coordinate(run.position);this.map=new CanvasTileMap({container:'map',center,zoom:cameraMetrics(run.radius,this.width,this.height,center[1],manifest.projectionLatitude).zoom,source,metadata:manifest.tileMetadata,onError:this.onError});await this.map.ready;if(generation!==this.generation)return false;this.ready=true;this.map.setQuality(this.quality);return true;}
+  dispose(){this.generation++;this.ready=false;this.map?.remove();this.map=null;this.maskDisplay=null;this.ctx.clearRect(0,0,this.width,this.height);}
+  setQuality(value){this.quality=value;this.map?.setQuality(value);this.resize();}
+  project(position){const p=this.map.project(this.coordinate(position));return[p.x,p.y];}
+  camera(position,radius,dt){if(!this.ready)return;const current=this.map.getCenter(),target=this.coordinate(position);target[0]+=Math.round((current.lng-target[0])/360)*360;const zoom=cameraMetrics(radius,this.width,this.height,target[1],this.manifest.projectionLatitude).zoom,f=1-Math.exp(-dt*5);if(Math.abs(target[0]-current.lng)<1e-9&&Math.abs(target[1]-current.lat)<1e-9&&Math.abs(zoom-this.map.getZoom())<1e-5)return;this.map.jumpTo({center:[current.lng+(target[0]-current.lng)*f,current.lat+(target[1]-current.lat)*f],zoom:this.map.getZoom()+(zoom-this.map.getZoom())*f});}
+  render(run,now,direction=[0,0],outlines=[]){const c=this.ctx;c.clearRect(0,0,this.width,this.height);if(!this.ready)return;this.map.draw();this.maskDisplay?.draw(this);
+    c.save();c.strokeStyle='#6b8050';c.lineWidth=2;c.setLineDash([10,8]);c.beginPath();for(const [i,p] of [[-HALF,-HALF],[HALF,-HALF],[HALF,HALF],[-HALF,HALF]].entries()){const q=this.project(p);i?c.lineTo(...q):c.moveTo(...q);}c.closePath();c.stroke();c.restore();
+    let vertices=0;c.save();for(const building of outlines.slice(0,4)){const count=building.polygons.reduce((sum,polygon)=>sum+polygon.reduce((n,ring)=>n+ring.length,0),0);if(vertices+count>512)continue;vertices+=count;c.strokeStyle=building.fits?'#74a12f':'#7d8768';c.lineWidth=building.fits?2:1.5;c.setLineDash(building.fits?[]:[5,4]);for(const polygon of building.polygons){c.beginPath();for(const ring of polygon){for(const [i,point] of ring.entries()){const q=this.project(point);i?c.lineTo(...q):c.moveTo(...q);}c.closePath();}c.stroke();}}c.restore();
+    const p=this.project(run.position),rx=Math.max(5,this.project([run.position[0]+run.radius,run.position[1]])[0]-p[0]),ry=Math.max(5,...[-1,1].map(sign=>Math.abs(this.project([run.position[0],run.position[1]+sign*run.radius])[1]-p[1])));
+    c.save();c.translate(...p);c.scale(1,ry/rx);const halo=c.createRadialGradient(0,0,rx*.8,0,0,rx*1.3);halo.addColorStop(0,'#a9d84c00');halo.addColorStop(.65,'#99bc4c33');halo.addColorStop(1,'#99bc4c00');c.fillStyle=halo;c.beginPath();c.arc(0,0,rx*1.3,0,Math.PI*2);c.fill();c.restore();
+    c.save();c.shadowBlur=this.quality==='low'?0:18;c.shadowColor='#1b261777';c.fillStyle='#10170f';c.beginPath();c.ellipse(...p,rx,ry,0,0,Math.PI*2);c.fill();c.restore();c.strokeStyle='#d8fa51';c.lineWidth=3;c.beginPath();c.ellipse(...p,rx+1,ry+1,0,0,Math.PI*2);c.stroke();c.strokeStyle='#516837';c.lineWidth=1;c.beginPath();c.ellipse(...p,rx*.83,ry*.83,0,now*.0003,now*.0003+4.5);c.stroke();c.strokeStyle='#293822';c.beginPath();c.ellipse(...p,rx*.61,ry*.61,0,-now*.0005,-now*.0005+3.5);c.stroke();
+    if(Math.hypot(...direction)>.15){const a=Math.atan2(-direction[1],direction[0]);c.fillStyle='#d8fa51';c.beginPath();c.arc(p[0]+Math.cos(a)*(rx+9),p[1]+Math.sin(a)*(ry+9),3,0,Math.PI*2);c.fill();}c.fillStyle='#ebf6d6';c.textAlign='center';c.font=`600 ${Math.max(10,Math.min(15,rx*.22))}px monospace`;c.fillText(`${Math.round(run.radius)} м`,p[0],p[1]+4);
+  }
+}

@@ -1,3 +1,4 @@
+import {MASK_ARENA_HALF,MASK_CHUNKS_PER_AXIS,maskChunkBounds} from './consumption-mask.js';
 /** One cached bitmap per resident 512m region, never a growing GeoJSON history. */
 export class MaskDisplay {
   constructor(mask){this.mask=mask;this.images=new Map();this.dirty=new Set();this.stats={rebuiltChunks:0,drawnChunks:0};}
@@ -25,8 +26,8 @@ export class MaskDisplay {
     // Unknown gameplay coverage is visibly tinted, even if lower-detail roads
     // are already available. It never looks like verified empty ground.
     c.fillStyle='#e9c77344';this.stats.unknownVisibleChunks=0;
-    for(let y=0;y<20;y++)for(let x=0;x<20;x++){if(this.mask.getCoverageChunk(`${x},${y}`))continue;const west=-5000+x*512,south=-5000+y*512,a=renderer.project([west,Math.min(5000,south+512)]),b=renderer.project([Math.min(5000,west+512),south]);if(b[0]<0||a[0]>renderer.width||b[1]<0||a[1]>renderer.height)continue;c.fillRect(a[0],a[1],b[0]-a[0],b[1]-a[1]);this.stats.unknownVisibleChunks++;}
-    for(const [key,image] of this.images){const [x,y]=key.split(',').map(Number),west=-5000+x*512,south=-5000+y*512;
+    for(let y=0;y<MASK_CHUNKS_PER_AXIS;y++)for(let x=0;x<MASK_CHUNKS_PER_AXIS;x++){if(this.mask.getCoverageChunk(`${x},${y}`))continue;const west=-MASK_ARENA_HALF+x*512,south=-MASK_ARENA_HALF+y*512,a=renderer.project([west,Math.min(MASK_ARENA_HALF,south+512)]),b=renderer.project([Math.min(MASK_ARENA_HALF,west+512),south]);if(b[0]<0||a[0]>renderer.width||b[1]<0||a[1]>renderer.height)continue;c.fillRect(a[0],a[1],b[0]-a[0],b[1]-a[1]);this.stats.unknownVisibleChunks++;}
+    for(const [key,image] of this.images){const [x,y]=key.split(',').map(Number),west=-MASK_ARENA_HALF+x*512,south=-MASK_ARENA_HALF+y*512;
       const a=renderer.project([west,south+512]),b=renderer.project([west+512,south]);
       if(b[0]<0||a[0]>renderer.width||b[1]<0||a[1]>renderer.height)continue;
       c.drawImage(image.canvas,a[0],a[1],b[0]-a[0],b[1]-a[1]);this.stats.drawnChunks++;

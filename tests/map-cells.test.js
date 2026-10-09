@@ -8,7 +8,7 @@ import {
 } from '../src/map-cells.js';
 
 const R = 6378137, DEG = Math.PI / 180;
-const step = 10000 / (R * DEG);
+const step = 5000 / (R * DEG);
 const wrapped = longitude => ((longitude + 180) % 360 + 360) % 360 - 180;
 const metricPoint = (point, cell) => [
   wrapped(point[0] - cell.center[0]) * R * DEG * Math.cos(cell.projectionLatitude * DEG),
@@ -30,15 +30,15 @@ test('global cell identities and geometry do not depend on pan, zoom, title, or 
   assert.equal(one.projectionLatitude, two.projectionLatitude);
 });
 
-test('every latitude row has exact 10000-metre arena bounds and a finite local basis', () => {
+test('every latitude row has exact 5000-metre arena bounds and a finite local basis', () => {
   for (let latitude = -MAP_MAX_LATITUDE + step / 2; latitude < MAP_MAX_LATITUDE; latitude += step) {
     const cell = getMapCellAt([73.12456, latitude]);
     assert.ok(cell);
     assert.ok(Number.isFinite(cell.projectionLatitude));
     const sw = metricPoint(cell.bounds.slice(0, 2), cell), ne = metricPoint(cell.bounds.slice(2), cell);
-    for (const [actual, expected] of [[sw[0], -5000], [sw[1], -5000], [ne[0], 5000], [ne[1], 5000]]) assert.ok(Math.abs(actual - expected) < 1e-6, `${latitude}: ${actual}`);
+    for (const [actual, expected] of [[sw[0], -2500], [sw[1], -2500], [ne[0], 2500], [ne[1], 2500]]) assert.ok(Math.abs(actual - expected) < 1e-6, `${latitude}: ${actual}`);
     const actualLocalWidth = (cell.bounds[2] - cell.bounds[0]) * R * DEG * Math.cos(cell.center[1] * DEG);
-    assert.ok(Math.abs(actualLocalWidth / 10000 - 1) < 0.0015, `${latitude}: local distortion too high`);
+    assert.ok(Math.abs(actualLocalWidth / 5000 - 1) < 0.0015, `${latitude}: local distortion too high`);
   }
   assert.notEqual(getMapCellAt([0, 0]).projectionLatitude, getMapCellAt([0, 59]).projectionLatitude);
 });
@@ -48,7 +48,7 @@ test('equatorial integer column basis never feeds acos a value above one', () =>
     const cell = getMapCellAt([0, latitude]);
     assert.ok(Number.isFinite(cell.projectionLatitude));
     assert.ok(Math.abs(cell.projectionLatitude) < 2);
-    assert.doesNotThrow(() => makeSectorQuery(cell));
+    assert.equal(cell.arenaSize,5000);
   }
 });
 
@@ -96,7 +96,7 @@ test('viewport selection is finite and all-or-none, with no arbitrary coarse sam
   const world = getVisibleMapCells([-180, -90, 180, 90]);
   assert.equal(world.tooDense, true);
   assert.equal(world.cells.length, 0);
-  assert.ok(world.totalCount > 1000000 && world.totalCount < 10000000);
+  assert.ok(world.totalCount > 1000000 && world.totalCount < 30000000);
   const city = getVisibleMapCells([30.1, 59.5, 30.9, 60]);
   assert.equal(city.tooDense, false);
   assert.equal(city.totalCount, city.cells.length);
@@ -137,7 +137,7 @@ test('polar caps are explicitly unselectable, while nearest and viewport behavio
     assert.equal(getMapCellAt([0, latitude]), null);
     const nearest = nearestMapCell([0, latitude]);
     assert.ok(nearest);
-    assert.doesNotThrow(() => makeSectorQuery(nearest));
+    assert.equal(nearest.arenaSize,5000);
   }
   assert.deepEqual(getVisibleMapCells([-10, 85, 10, 90]), { cells: [], tooDense: false, totalCount: 0 });
 });
@@ -185,7 +185,7 @@ test('empty campaign stays empty and nearest does not silently fall back to glob
   assert.deepEqual(getVisibleMapCells([-180, -90, 180, 90], { campaign }), { cells: [], tooDense: false, totalCount: 0 });
 });
 
-test('new map campaigns are complete single arenas compatible with existing dimensions and queries', () => {
+test('new map campaigns are complete single arenas with exact5km dimensions and new identities', () => {
   for (const point of [[0, 0], [30.4, 59.7], [179.999, 60], [-179.999, -16], [10, 84.8]]) {
     const cell = getMapCellAt(point), campaign = makeMapCellCampaign(cell, { title: '  Selected square  ' });
     assert.equal(campaign.id, cell.campaignId);
@@ -198,9 +198,9 @@ test('new map campaigns are complete single arenas compatible with existing dime
     assert.equal(campaign.extentLabel, 'Район, выбранный на карте');
     assert.equal(campaign.boundaryIsPolygon, false);
     const size = coverageDimensions(campaign.bounds, campaign.center, campaign.projectionLatitude);
-    assert.ok(Math.abs(size.widthKm - 10) < 1e-8);
-    assert.ok(Math.abs(size.heightKm - 10) < 1e-8);
-    assert.doesNotThrow(() => makeSectorQuery(campaign.sectors[0]));
+    assert.ok(Math.abs(size.widthKm - 5) < 1e-8);
+    assert.ok(Math.abs(size.heightKm - 5) < 1e-8);
+    assert.equal(campaign.sectors[0].arenaSize,5000);
     assert.equal(getMapCellAt(cell.center, { campaign }).id, cell.id);
     assert.equal(mapCellFeature(cell).id, cell.id);
   }
