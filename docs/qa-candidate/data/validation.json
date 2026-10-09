@@ -1,0 +1,38 @@
+{
+  "checks": [
+    {
+      "level": "pushkin",
+      "buildings": 12721,
+      "totalArea": 4793226.123,
+      "holes": 49,
+      "multiComponentBuildings": 14,
+      "tilesDecoded": 437,
+      "tileFeaturesDecoded": 206542,
+      "maxAreaRoundingErrorM2": 0.1438,
+      "maxProjectionRoundtripErrorM": 0.000706,
+      "spawn": [
+        0,
+        0
+      ],
+      "nearbyEdibleBuildings": 23,
+      "result": "PASS"
+    },
+    {
+      "level": "gatchina",
+      "buildings": 12481,
+      "totalArea": 3763215.936,
+      "holes": 8,
+      "multiComponentBuildings": 1,
+      "tilesDecoded": 412,
+      "tileFeaturesDecoded": 63959,
+      "maxAreaRoundingErrorM2": 0.1286,
+      "maxProjectionRoundtripErrorM": 0.000706,
+      "spawn": [
+        0,
+        0
+      ],
+      "nearbyEdibleBuildings": 41,
+      "result": "PASS"
+    }
+  ]
+}
