@@ -7,7 +7,7 @@ import {advanceHole} from './motion.js';
 export class StreamingGame {
   constructor({sector,store,onStatus=()=>{},onMilestone=()=>{},source,streamFactory=options=>new TileStream(options),displayFactory=mask=>new MaskDisplay(mask)}){
     this.sector=sector;this.store=store;this.onStatus=onStatus;this.onMilestone=onMilestone;this.mask=createConsumptionMask();this.display=displayFactory(this.mask);this.disposed=false;this.lastStream=-Infinity;this.lastSave=0;this.lastScan=null;this.job=null;this.saving=null;this.lastError=null;
-    this.run=null;this.stream=streamFactory({manifest:sector,mask:this.mask,source,onChange:key=>this.display.changed(key),onStatus});
+    this.saveStatus='idle';this.savedAt=null;this.run=null;this.stream=streamFactory({manifest:sector,mask:this.mask,source,onChange:key=>this.display.changed(key),onStatus});
   }
   async prepare(entryPoint=null,{restart=false}={}){
     if(restart)await this.store.reset(this.sector.id);this.check();
@@ -35,8 +35,8 @@ export class StreamingGame {
   async persist(){
     if(!this.run)return;if(this.saving){await this.saving;return this.persist();}
     const chunks=this.mask.takeDirtyChunks(),snapshot=serializeStreamRun(this.run);
-    this.saving=this.store.save(snapshot,chunks);
-    try{await this.saving;}catch(error){this.mask.markChunksDirty(chunks.keys());throw error;}finally{this.saving=null;}
+    this.saveStatus='saving';this.saving=this.store.save(snapshot,chunks);
+    try{await this.saving;this.saveStatus='saved';this.savedAt=Date.now();}catch(error){this.saveStatus='error';this.mask.markChunksDirty(chunks.keys());throw error;}finally{this.saving=null;}
   }
   async retry(){this.lastError=null;await this.stream.retry(this.run.position,this.run.radius);}
   dispose(){this.disposed=true;this.stream.dispose();this.display.dispose();}

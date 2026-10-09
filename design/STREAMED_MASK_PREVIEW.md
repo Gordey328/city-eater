@@ -6,6 +6,12 @@ This is an opt-in `?stream=1` preview. A normal URL retains the previous game. E
 
 The adapter follows OpenFreeMap's documented native z14 OpenMapTiles layout. At this implementation checkpoint, live TileJSON/native-tile access was blocked in the available test environment. **Real OpenFreeMap payloads, CORS, cold-start latency and working GPU gameplay have not been verified.** The preview must fail clearly when the provider is unavailable. Fixture results are not live-source evidence.
 
+### Follow-up verification, 2026-10-09 17:13 UTC
+
+A fresh supported browser session opened the actual published preview and selected a real Pushkin-area square. The normal app flow reached the `coverage` phase (native responses → worker rasterization → coverage ingestion) and then `renderer.load`. This establishes successful source/worker startup in that session; no proxy, endpoint rotation or security workaround was used. The renderer then failed with `GPUInitializationError` because WebGL 2 is disabled in the available cloud browser, also reproduced on the prepared Pushkin level. No movement, visible absorption or GPU save/reentry loop was verified. Request-byte counters were not exposed on that normal URL, so there is still no measured live cold-start comparison. The user's reported device symptom remains undiagnosed pending its screenshot or a supported rendering browser.
+
+Unpublished corrective tests now require an actual preview style-load event rather than accepting a readiness timeout, reject an unready renderer before gameplay, and translate WebGL initialization errors clearly. These checks do not substitute for the missing rendered end-to-end test.
+
 - [OpenFreeMap integration](https://openfreemap.org/quick_start/)
 - [Service terms](https://openfreemap.org/tos/)
 - [Building tile generation](https://github.com/openmaptiles/planetiler-openmaptiles/blob/main/src/main/java/org/openmaptiles/layers/Building.java)

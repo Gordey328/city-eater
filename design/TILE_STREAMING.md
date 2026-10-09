@@ -1,17 +1,18 @@
 # Native-tile coverage prototype
 
-Status: implemented and fixture-tested for the optional partial-building preview. The live OpenFreeMap endpoint has **not** been verified in the current execution environment: access was blocked. Do not treat the local tests as proof of live source availability, payload contents, network latency or mobile rendering performance. No alternate endpoints or access workarounds were used.
+Status: native streaming and Canvas2D background support are implemented. Initial cloud source probes were blocked; subsequent permitted app navigation loaded real native tiles and produced coverage. End-to-end Canvas2D gameplay remains a separate release gate. Local fixture tests do not establish live network latency or mobile rendering performance. No alternate endpoints or access workarounds are used.
 
 ## Public API
 
 `TileSource` in `src/tile-source.js`:
 
 - `getMetadata({signal} = {})` returns validated `tiles`, `minzoom`, `maxzoom`, `nativeZoom`, attribution and advisory `sourceKey`.
-- `loadNativeTile(z, x, y, signal)` returns one native PBF `ArrayBuffer`, canonical coordinates, key, source key and byte count. Every caller receives its own transferable buffer copy; the raw LRU remains intact.
+- `loadNativeTile(z, x, y, signal)` accepts only native z14 and returns one native PBF `ArrayBuffer`, canonical coordinates, key, source key and byte count. Every caller receives its own transferable buffer copy; the raw LRU remains intact.
+- `loadVisualTile(z, x, y, signal)` accepts visual zooms 0–14 within metadata limits, uses the same cache/endpoint, and queues behind native gameplay.
 - `retryFailures({clearCache = false} = {})` permits an explicit retry. Errors otherwise remain latched.
 - `dispose()` aborts this session's requests and clears its raw LRU.
 
-Use one source instance per stream session. Concurrent requests for the same native tile are deduplicated. The source is not a general independently-cancellable multi-subscriber service: the initiating request's signal owns its fetch; session cancellation must call `dispose()`.
+Use one source instance per stream session and share it with its visual background. Concurrent requests for the same tile are deduplicated. Subscribers cancel independently: cancelling visual work cannot abort a native subscriber; the underlying request aborts only when all subscribers have cancelled. Session cancellation calls `dispose()`.
 
 `TileStream` in `src/tile-stream.js`:
 
@@ -81,3 +82,15 @@ Official documentation:
 - Existing real Gatchina relation `r1659230`, with two courtyards, locally encoded as native-zoom PBF and decoded back into masks. The test requires retained courtyard holes and less than 2% changed occupied cells from vector-tile quantization compared with the original footprint.
 
 The real-geometry replay uses the repository's existing OSM geometry. It is not an OpenFreeMap response or a live service benchmark.
+
+## Canvas2D background tiles
+
+`VisualTileLayer` in `src/visual-tile-source.js` accepts `{source, onChange, onError}` and provides `ensure([{z,x,y}])`, `get(z,x,y)`, explicit `retry()`, `dispose()` and `stats`. The shared source remains owned by the whole game, not the visual layer. Pan changes the desired set and discards obsolete output; it does not abort shared tile downloads.
+
+The layer runs at most one visual fetch and one visual worker job at a time. Native gameplay takes queue priority; the shared source still permits at most two total network requests. It retains at most sixteen 512×512 tile images (16 MiB nominal RGBA pixels), plus transient rasterization data. Existing raw-source/geometry budgets are unchanged.
+
+The worker decodes real landcover, selected green landuse, park, water, waterway and transportation geometry. It clips drawing to the canonical tile core and preserves polygon holes. Buildings are never painted into background tiles, so consumed building cells cannot reappear beneath the gameplay mask. Labels are omitted in this first Canvas2D style.
+
+Where worker OffscreenCanvas is supported, each tile is rasterized off the UI thread and returned as an ImageBitmap. Otherwise bounded geometry commands return to the main thread, rasterize once into a cached Canvas2D tile, and are discarded. Frame rendering uses cached image draws rather than replaying polygons. Bitmap resources are closed on eviction/disposal; fallback canvases are released.
+
+`tests/visual-tiles.test.js` verifies visual/native zoom separation, native queue priority, shared-subscriber cancellation, raster clipping/holes, omission of buildings, offscreen and fallback paths, cache residency, stale visual results, and shared-source lifecycle. These tests are source-independent; actual visible rendering/input must also pass through the delivered Canvas2D path.

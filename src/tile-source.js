@@ -33,12 +33,12 @@ export function validateTileMetadata(data) {
   // A URL signature is advisory, NOT a guarantee of an immutable OSM snapshot.
   // Consumed cells remain anchored in the arena even if source versions change.
   return {tiles, minzoom: data.minzoom ?? 0, maxzoom: data.maxzoom, nativeZoom: NATIVE_ZOOM,
-    attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> · <a href="https://openfreemap.org/" target="_blank" rel="noopener noreferrer">OpenFreeMap</a>', sourceKey: `openfreemap-z14:${tiles.join('|')}`,
+    attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> · <a href="https://openfreemap.org/" target="_blank" rel="noopener noreferrer">OpenFreeMap</a> · © <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener noreferrer">OpenMapTiles</a>', sourceKey: `openfreemap-z14:${tiles.join('|')}`,
     sourceRevisionImmutable: false};
 }
-function canonicalTile(z, x, y) {
+function canonicalTile(z, x, y, native = true) {
   const n = 2 ** z;
-  if (z !== NATIVE_ZOOM || !Number.isInteger(x) || !Number.isInteger(y) || y < 0 || y >= n) {
+  if (!Number.isInteger(z) || z < 0 || z > NATIVE_ZOOM || (native && z !== NATIVE_ZOOM) || !Number.isInteger(x) || !Number.isInteger(y) || y < 0 || y >= n) {
     throw new TileSourceError('INVALID_TILE', 'Некорректный исходный тайл.');
   }
   return {z, x: ((x % n) + n) % n, y};
@@ -49,58 +49,96 @@ export class TileSource {
     this.fetchImpl = fetchImpl;
     this.controller = new AbortController();
     this.cache = new Map(); this.cacheBytes = 0; this.pending = new Map(); this.errors = new Map();
-    this.queue = []; this.running = 0; this.metadata = null; this.metadataPromise = null;
-    this.stats = {requests: 0, metadataRequests: 0, tileRequests: 0, bytes: 0, cacheHits: 0, maxConcurrent: 0, retainedTiles: 0, retainedBytes: 0};
+    this.queue = []; this.running = 0; this.metadata = null; this.metadataPromise = null; this.metadataTask = null;
+    this.stats = {requests: 0, metadataRequests: 0, tileRequests: 0, bytes: 0, cacheHits: 0, maxConcurrent: 0, retainedTiles: 0, retainedBytes: 0, nativeRequests: 0, visualRequests: 0};
   }
   async getMetadata({signal} = {}) {
     checkSignal(signal); checkSignal(this.controller.signal);
     if (this.metadata) return this.metadata;
     if (this.errors.has('metadata')) throw this.errors.get('metadata');
-    if (!this.metadataPromise) this.metadataPromise = this.schedule(async () => {
-      this.stats.metadataRequests++;
-      const bytes = await this.fetchBytes(TILEJSON_URL, TILE_SOURCE_LIMITS.metadataBytes, signal);
-      let parsed;
-      try { parsed = JSON.parse(new TextDecoder().decode(bytes)); } catch { throw new TileSourceError('INVALID_METADATA', 'Источник вернул неполные сведения о карте.'); }
-      this.metadata = validateTileMetadata(parsed);
-      return this.metadata;
-    }, signal).catch(error => { if (error.name !== 'AbortError') this.errors.set('metadata', error); throw error; }).finally(() => { this.metadataPromise = null; });
-    const result = await this.metadataPromise;
-    checkSignal(signal); return result;
+    if (!this.metadataTask || this.metadataTask.controller.signal.aborted) {
+      const record = this.sharedTask('metadata', async sharedSignal => {
+        this.stats.metadataRequests++;
+        const bytes = await this.fetchBytes(TILEJSON_URL, TILE_SOURCE_LIMITS.metadataBytes, sharedSignal);
+        let parsed;
+        try { parsed = JSON.parse(new TextDecoder().decode(bytes)); } catch { throw new TileSourceError('INVALID_METADATA', 'Источник вернул неполные сведения о карте.'); }
+        this.metadata = validateTileMetadata(parsed); return this.metadata;
+      }, -1, () => { if (this.metadataTask === record) { this.metadataTask = null; this.metadataPromise = null; } });
+      this.metadataTask = record; this.metadataPromise = record.promise;
+    }
+    return this.subscribe(this.metadataTask, signal);
   }
-  async loadNativeTile(z, x, y, signal) {
+  loadNativeTile(z, x, y, signal) { return this.loadTile(z, x, y, signal, true); }
+  loadVisualTile(z, x, y, signal) { return this.loadTile(z, x, y, signal, false); }
+  async loadTile(z, x, y, signal, native) {
     checkSignal(signal); checkSignal(this.controller.signal);
-    const tile = canonicalTile(z, x, y), metadata = await this.getMetadata({signal});
+    const tile = canonicalTile(z, x, y, native), metadata = await this.getMetadata({signal});
+    if (tile.z < metadata.minzoom) throw new TileSourceError('INVALID_TILE', 'Источник не поддерживает этот масштаб.');
     const key = `${metadata.sourceKey}/${tile.z}/${tile.x}/${tile.y}`;
     if (this.errors.has(key)) throw this.errors.get(key);
     if (this.cache.has(key)) {
       const value = this.cache.get(key); this.cache.delete(key); this.cache.set(key, value); this.stats.cacheHits++;
       return {...value, buffer: value.buffer.slice(0)};
     }
-    if (!this.pending.has(key)) {
-      const promise = this.schedule(async () => {
+    if (!this.pending.has(key) || this.pending.get(key).controller.signal.aborted) {
+      const record = this.sharedTask(key, async sharedSignal => {
         const url = metadata.tiles[0].replace('{z}', String(tile.z)).replace('{x}', String(tile.x)).replace('{y}', String(tile.y));
-        sourceUrl(url); this.stats.tileRequests++;
-        const bytes = await this.fetchBytes(url, TILE_SOURCE_LIMITS.tileBytes, signal);
+        sourceUrl(url); this.stats.tileRequests++; this.stats[native ? 'nativeRequests' : 'visualRequests']++;
+        const bytes = await this.fetchBytes(url, TILE_SOURCE_LIMITS.tileBytes, sharedSignal);
         const value = {...tile, key, sourceKey: metadata.sourceKey, buffer: bytes.buffer, bytes: bytes.byteLength};
-        this.cache.set(key, value); this.cacheBytes += value.bytes;
-        this.trimCache(); return value;
-      }, signal).catch(error => { if (error.name !== 'AbortError') this.errors.set(key, error); throw error; }).finally(() => this.pending.delete(key));
-      this.pending.set(key, promise);
+        this.cache.set(key, value); this.cacheBytes += value.bytes; this.trimCache(); return value;
+      }, native ? 0 : 1, () => { if (this.pending.get(key) === record) this.pending.delete(key); });
+      this.pending.set(key, record);
     }
-    const value = await this.pending.get(key); checkSignal(signal);
-    // Callers may transfer their copy to a worker without detaching the LRU.
+    const record = this.pending.get(key);
+    if (native) record.priority = Math.min(record.priority, 0);
+    const value = await this.subscribe(record, signal);
     return {...value, buffer: value.buffer.slice(0)};
   }
-  schedule(task, signal) {
+  sharedTask(key, task, priority, cleanup) {
+    const record = {controller: new AbortController(), subscribers: new Set(), settled: false, priority, promise: null};
+    record.promise = this.schedule(() => task(record.controller.signal), record.controller.signal, () => record.priority)
+      .catch(error => { if (error.name !== 'AbortError') this.errors.set(key, error); throw error; })
+      .finally(() => { record.settled = true; cleanup(); });
+    return record;
+  }
+  subscribe(record, signal) {
+    checkSignal(signal);
+    return new Promise((resolve, reject) => {
+      const subscriber = {}; let done = false; record.subscribers.add(subscriber);
+      const finish = (error, value) => {
+        if (done) return; done = true; signal?.removeEventListener('abort', abort); record.subscribers.delete(subscriber);
+        if (error) reject(error); else resolve(value);
+      };
+      const abort = () => {
+        finish(cancelled());
+        // Visual navigation cannot cancel a native gameplay subscriber sharing
+        // the same z14 download. Abort only after the last subscriber leaves.
+        if (!record.settled && !record.subscribers.size) record.controller.abort();
+      };
+      signal?.addEventListener('abort', abort, {once: true});
+      record.promise.then(value => finish(null, value), error => finish(error));
+      if (signal?.aborted) abort();
+    });
+  }
+  schedule(task, signal, priority = () => 0) {
     checkSignal(signal); checkSignal(this.controller.signal);
     return new Promise((resolve, reject) => {
-      const item = {task, signal, resolve, reject};
+      const item = {task, signal, resolve, reject, priority, started: false, cleanup: null};
+      const abort = () => {
+        if (item.started) return;
+        const index = this.queue.indexOf(item); if (index >= 0) this.queue.splice(index, 1);
+        item.cleanup(); reject(cancelled());
+      };
+      item.cleanup = () => signal?.removeEventListener('abort', abort);
+      signal?.addEventListener('abort', abort, {once: true});
       this.queue.push(item); this.pump();
     });
   }
   pump() {
+    this.queue.sort((a, b) => a.priority() - b.priority());
     while (this.running < TILE_SOURCE_LIMITS.concurrency && this.queue.length) {
-      const item = this.queue.shift();
+      const item = this.queue.shift(); item.started = true; item.cleanup();
       if (this.controller.signal.aborted || item.signal?.aborted) { item.reject(cancelled()); continue; }
       this.running++; this.stats.maxConcurrent = Math.max(this.stats.maxConcurrent, this.running);
       Promise.resolve().then(item.task).then(item.resolve, item.reject).finally(() => { this.running--; this.pump(); });
@@ -164,7 +202,7 @@ export class TileSource {
     if (clearCache) { this.cache.clear(); this.cacheBytes = 0; this.trimCache(); }
   }
   dispose() {
-    this.controller.abort(); for (const item of this.queue.splice(0)) item.reject(cancelled());
+    this.controller.abort(); for (const item of this.queue.splice(0)) { item.cleanup(); item.reject(cancelled()); }
     this.cache.clear(); this.cacheBytes = 0; this.trimCache(); this.errors.clear();
   }
 }
