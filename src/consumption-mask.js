@@ -1,25 +1,30 @@
+import {ARENA_HALF_METRES, ARENA_SIZE_METRES} from './game-config.js';
+
 /**
- * Source-independent, fixed-world consumption grid for the optional partial mode.
+ * Source-independent, fixed-world consumption grid for the whole-building and partial modes.
  *
  * Game resolution is 2 m: a cell contributes 4 m² iff its centre lies in a real
  * building footprint. This is a raster approximation, not survey-grade area.
- * Grid origin is (-5000,-5000); y grows north. Byte bits are low-bit-first and
+ * Grid origin is (-2500,-2500); y grows north. Byte bits are low-bit-first and
  * each chunk is 256×256 cells. Cells outside the fixed arena are always zero.
  * Coverage MUST describe a complete chunk after ALL intersecting source tiles
  * are available. Missing chunks are unknown, never assumed to contain buildings.
  * Consumed bits survive coverage eviction, source revisions and feature-ID changes.
  */
-export const MASK_VERSION = 1;
+export const MASK_VERSION = 2;
 export const MASK_CELL_METRES = 2;
 export const MASK_CELL_AREA_M2 = 4;
-export const MASK_ARENA_HALF = 5000;
-export const MASK_GRID_SIZE = 5000;
+export const MASK_ARENA_HALF = ARENA_HALF_METRES;
+export const MASK_GRID_SIZE = ARENA_SIZE_METRES / MASK_CELL_METRES;
 export const MASK_CHUNK_SIZE = 256;
 export const MASK_CHUNK_BYTES = 8192;
-export const MASK_CHUNKS_PER_AXIS = 20;
+export const MASK_CHUNKS_PER_AXIS = Math.ceil(MASK_GRID_SIZE / MASK_CHUNK_SIZE);
+export const MASK_TOTAL_CELLS = MASK_GRID_SIZE ** 2;
+export const MASK_CHUNK_COUNT = MASK_CHUNKS_PER_AXIS ** 2;
+const CHUNK_METRES = MASK_CHUNK_SIZE * MASK_CELL_METRES;
 const WORDS_PER_ROW = MASK_CHUNK_SIZE / 32;
 const WORDS_PER_CHUNK = MASK_CHUNK_BYTES / 4;
-const KEYS = Array.from({length: 400}, (_, n) => `${n % 20},${Math.floor(n / 20)}`);
+const KEYS = Array.from({length: MASK_CHUNK_COUNT}, (_, n) => `${n % MASK_CHUNKS_PER_AXIS},${Math.floor(n / MASK_CHUNKS_PER_AXIS)}`);
 const now = () => globalThis.performance?.now() ?? Date.now();
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const pointX = p => Array.isArray(p) ? p[0] : p?.x;
@@ -31,38 +36,40 @@ function point(p) {
   return {x, y};
 }
 export function maskChunkKey(cx, cy) {
-  if (!Number.isInteger(cx) || !Number.isInteger(cy) || cx < 0 || cy < 0 || cx >= 20 || cy >= 20)
-    throw new RangeError('Chunk coordinates must be integers in 0..19');
-  return KEYS[cy * 20 + cx];
+  if (!Number.isInteger(cx) || !Number.isInteger(cy) || cx < 0 || cy < 0 || cx >= MASK_CHUNKS_PER_AXIS || cy >= MASK_CHUNKS_PER_AXIS)
+    throw new RangeError(`Chunk coordinates must be integers in 0..${MASK_CHUNKS_PER_AXIS - 1}`);
+  return KEYS[cy * MASK_CHUNKS_PER_AXIS + cx];
 }
 export function parseMaskChunkKey(key) {
-  if (typeof key !== 'string' || !/^(?:[0-9]|1[0-9]),(?:[0-9]|1[0-9])$/.test(key))
+  if (typeof key !== 'string' || key.length!==3 || !/^[0-9],[0-9]$/.test(key))
     throw new RangeError('Expected canonical arena chunk key "cx,cy"');
   const [cx, cy] = key.split(',').map(Number);
-  return {cx, cy, index: cy * 20 + cx};
+  return {cx, cy, index: cy * MASK_CHUNKS_PER_AXIS + cx};
 }
 export function maskCellAt(position) {
   const {x, y} = point(position);
-  if (x < -5000 || y < -5000 || x >= 5000 || y >= 5000) return null;
-  const gx = Math.floor((x + 5000) / 2), gy = Math.floor((y + 5000) / 2);
+  if (x < -MASK_ARENA_HALF || y < -MASK_ARENA_HALF || x >= MASK_ARENA_HALF || y >= MASK_ARENA_HALF) return null;
+  // Addition can round the last representable in-arena coordinate to the edge.
+  const gx = Math.min(MASK_GRID_SIZE-1,Math.floor((x + MASK_ARENA_HALF) / MASK_CELL_METRES));
+  const gy = Math.min(MASK_GRID_SIZE-1,Math.floor((y + MASK_ARENA_HALF) / MASK_CELL_METRES));
   const cx = gx >>> 8, cy = gy >>> 8, localX = gx & 255, localY = gy & 255;
-  return {gx, gy, cx, cy, localX, localY, key: KEYS[cy * 20 + cx], bit: localY * 256 + localX};
+  return {gx, gy, cx, cy, localX, localY, key: KEYS[cy * MASK_CHUNKS_PER_AXIS + cx], bit: localY * 256 + localX};
 }
 export function maskChunkBounds(key) {
   const {cx, cy} = parseMaskChunkKey(key);
-  return {minX: -5000 + cx * 512, minY: -5000 + cy * 512,
-    maxX: Math.min(5000, -5000 + (cx + 1) * 512), maxY: Math.min(5000, -5000 + (cy + 1) * 512)};
+  return {minX: -MASK_ARENA_HALF + cx * CHUNK_METRES, minY: -MASK_ARENA_HALF + cy * CHUNK_METRES,
+    maxX: Math.min(MASK_ARENA_HALF, -MASK_ARENA_HALF + (cx + 1) * CHUNK_METRES), maxY: Math.min(MASK_ARENA_HALF, -MASK_ARENA_HALF + (cy + 1) * CHUNK_METRES)};
 }
 /** Chunks touching a finite world-space bbox, clamped to the arena. */
 export function maskChunksForBounds(bounds) {
   const b = Array.isArray(bounds) ? {minX:bounds[0], minY:bounds[1], maxX:bounds[2], maxY:bounds[3]} : bounds;
   if (!b || ![b.minX,b.minY,b.maxX,b.maxY].every(Number.isFinite) || b.minX > b.maxX || b.minY > b.maxY)
     throw new TypeError('Expected finite ordered bounds');
-  if (b.maxX < -5000 || b.maxY < -5000 || b.minX >= 5000 || b.minY >= 5000) return [];
-  const x0 = clamp(Math.floor((b.minX+5000)/512),0,19), y0 = clamp(Math.floor((b.minY+5000)/512),0,19);
-  const x1 = clamp(Math.floor((b.maxX+5000)/512),0,19), y1 = clamp(Math.floor((b.maxY+5000)/512),0,19);
+  if (b.maxX < -MASK_ARENA_HALF || b.maxY < -MASK_ARENA_HALF || b.minX >= MASK_ARENA_HALF || b.minY >= MASK_ARENA_HALF) return [];
+  const x0 = clamp(Math.floor((b.minX+MASK_ARENA_HALF)/CHUNK_METRES),0,MASK_CHUNKS_PER_AXIS-1), y0 = clamp(Math.floor((b.minY+MASK_ARENA_HALF)/CHUNK_METRES),0,MASK_CHUNKS_PER_AXIS-1);
+  const x1 = clamp(Math.floor((b.maxX+MASK_ARENA_HALF)/CHUNK_METRES),0,MASK_CHUNKS_PER_AXIS-1), y1 = clamp(Math.floor((b.maxY+MASK_ARENA_HALF)/CHUNK_METRES),0,MASK_CHUNKS_PER_AXIS-1);
   const keys = [];
-  for (let cy=y0;cy<=y1;cy++) for (let cx=x0;cx<=x1;cx++) keys.push(KEYS[cy*20+cx]);
+  for (let cy=y0;cy<=y1;cy++) for (let cx=x0;cx<=x1;cx++) keys.push(KEYS[cy*MASK_CHUNKS_PER_AXIS+cx]);
   return keys;
 }
 export function countMaskBits(bits) {
@@ -83,12 +90,12 @@ function copyChunk(key, input) {
   const {cx,cy,index} = parseMaskChunkKey(key);
   const bits = new Uint8Array(input), words = new Uint32Array(bits.buffer);
   // Never reward padded cells in the last row/column of chunks.
-  const width = Math.min(256, 5000-cx*256), height = Math.min(256,5000-cy*256);
+  const width = Math.min(256, MASK_GRID_SIZE-cx*MASK_CHUNK_SIZE), height = Math.min(256,MASK_GRID_SIZE-cy*MASK_CHUNK_SIZE);
   if (height < 256) words.fill(0, height*WORDS_PER_ROW);
   if (width < 256) for (let row=0;row<height;row++) {
-    const offset = row*WORDS_PER_ROW;
-    words[offset+(width>>>5)] &= rangeMask(0,(width&31)-1);
-    words.fill(0,offset+(width>>>5)+1,offset+WORDS_PER_ROW);
+    const offset = row*WORDS_PER_ROW, completeWords=width>>>5, tail=width&31;
+    if (tail) words[offset+completeWords] &= rangeMask(0,tail-1);
+    words.fill(0,offset+completeWords+(tail?1:0),offset+WORDS_PER_ROW);
   }
   return {key,cx,cy,index,bits,words};
 }
@@ -132,7 +139,7 @@ function shapeInterval(shape,y,out) {
 export class ConsumptionMask {
   constructor(snapshot=null) {
     this.coverage=new Map();this.consumed=new Map();
-    this.coverageSlots=new Array(400);this.consumedSlots=new Array(400);
+    this.coverageSlots=new Array(MASK_CHUNK_COUNT);this.consumedSlots=new Array(MASK_CHUNK_COUNT);
     this.consumedCells=0;this.coverageRevision=0;this.consumedRevision=0;this.dirtyConsumed=new Set();
     if (snapshot) this.restore(snapshot);
   }
@@ -168,6 +175,60 @@ export class ConsumptionMask {
   consumeCircle(position,radius,options={}) { return this._consume(shapeFor(position,position,radius),options); }
   consumeSweep(from,to,radius,options={}) { return this._consume(shapeFor(from,to,radius),options); }
   /**
+   * Consume exactly one caller-certified complete real building footprint.
+   * The input contains its raster masks, never masks for its bounding box or
+   * neighbouring buildings. Source completeness/identity is the caller's job.
+   * Validate and copy every entry before doing any work. An unknown required
+   * chunk returns an incomplete, zero-reward result without changing the mask.
+   * Only footprint ∩ known coverage ∩ not-yet-consumed cells can earn area.
+   */
+  consumeBuildingChunks(records) {
+    if (!records || typeof records[Symbol.iterator]!=='function')
+      throw new TypeError('Expected iterable [key, Uint8Array] building chunks');
+    const chunks=new Map();let entries=0;
+    for (const entry of records) {
+      if (++entries>MASK_CHUNK_COUNT || !Array.isArray(entry) || entry.length!==2 || chunks.has(entry[0]))
+        throw new TypeError('Invalid or duplicate building chunk');
+      const chunk=copyChunk(entry[0],entry[1]);chunks.set(chunk.key,chunk);
+    }
+    const unknownChunks=[...chunks.keys()].filter(key=>!this.coverage.has(key));
+    if (unknownChunks.length) return {newCells:0,areaM2:0,changedChunks:[],unknownChunks,dirtyBounds:null,
+      complete:false,cursor:null,rows:0,wordsVisited:0,consumedCells:this.consumedCells,consumedAreaM2:this.consumedAreaM2};
+
+    const staged=new Map();let newCells=0,wordsVisited=0,minGX=Infinity,minGY=Infinity,maxGX=-Infinity,maxGY=-Infinity;
+    for (const chunk of chunks.values()) {
+      const coverage=this.coverageSlots[chunk.index],previous=this.consumedSlots[chunk.index];
+      let consumed=null;
+      for (let wi=0;wi<WORDS_PER_CHUNK;wi++) {
+        const footprint=chunk.words[wi];if (!footprint) continue;
+        wordsVisited++;
+        const fresh=(footprint & coverage.words[wi] & ~(previous?.words[wi]??0))>>>0;
+        if (!fresh) continue;
+        if (!consumed) {
+          consumed=previous?copyChunk(chunk.key,previous.bits):emptyChunk(chunk.key,chunk.index);
+          staged.set(chunk.key,consumed);
+        }
+        consumed.words[wi]|=fresh;newCells+=popcount(fresh);
+        const base=chunk.cx*MASK_CHUNK_SIZE+(wi%WORDS_PER_ROW)*32;
+        const gy=chunk.cy*MASK_CHUNK_SIZE+Math.floor(wi/WORDS_PER_ROW);
+        minGX=Math.min(minGX,base+31-Math.clz32((fresh&-fresh)>>>0));
+        maxGX=Math.max(maxGX,base+31-Math.clz32(fresh));minGY=Math.min(minGY,gy);maxGY=Math.max(maxGY,gy);
+      }
+    }
+    // Commit only after validation and delta construction succeeded everywhere.
+    if (newCells) {
+      this.consumedRevision++;this.consumedCells+=newCells;
+      for (const [key,chunk] of staged) {
+        chunk.revision=this.consumedRevision;this.consumed.set(key,chunk);this.consumedSlots[chunk.index]=chunk;
+        this.dirtyConsumed.add(key);
+      }
+    }
+    return {newCells,areaM2:newCells*MASK_CELL_AREA_M2,changedChunks:[...staged.keys()],unknownChunks:[],
+      dirtyBounds:newCells?{minX:-MASK_ARENA_HALF+minGX*MASK_CELL_METRES,minY:-MASK_ARENA_HALF+minGY*MASK_CELL_METRES,
+        maxX:-MASK_ARENA_HALF+(maxGX+1)*MASK_CELL_METRES,maxY:-MASK_ARENA_HALF+(maxGY+1)*MASK_CELL_METRES}:null,
+      complete:true,cursor:null,rows:0,wordsVisited,consumedCells:this.consumedCells,consumedAreaM2:this.consumedAreaM2};
+  }
+  /**
    * Results are deltas for this batch. Resume with identical geometry and cursor.
    * maxRows bounds deterministic work; maxMilliseconds is a soft time budget
    * checked per row (one row always progresses). Unknown data may arrive later:
@@ -176,8 +237,8 @@ export class ConsumptionMask {
   _consume(shape,{maxRows=Infinity,maxMilliseconds=Infinity,cursor=null}={}) {
     if (!(maxRows>0) || !(maxMilliseconds>=0) || (!Number.isInteger(maxRows) && maxRows!==Infinity))
       throw new RangeError('Expected positive integer maxRows and nonnegative maxMilliseconds');
-    const first=Math.max(0,Math.ceil((shape.minY+5000)/2-0.5));
-    const last=Math.min(4999,Math.floor((shape.maxY+5000)/2-0.5));
+    const first=Math.max(0,Math.ceil((shape.minY+MASK_ARENA_HALF)/MASK_CELL_METRES-0.5));
+    const last=Math.min(MASK_GRID_SIZE-1,Math.floor((shape.maxY+MASK_ARENA_HALF)/MASK_CELL_METRES-0.5));
     let gy=first;
     if (cursor) {
       if (cursor.signature!==shape.signature || !Number.isInteger(cursor.nextRow) || cursor.nextRow<first || cursor.nextRow>last+1)
@@ -189,13 +250,13 @@ export class ConsumptionMask {
     for (;gy<=last;gy++) {
       if (rows && (rows>=maxRows || (maxMilliseconds!==Infinity && now()-started>=maxMilliseconds))) break;
       rows++;
-      shapeInterval(shape,-4999+gy*2,interval);
-      const gx0=Math.max(0,Math.ceil((interval.min+5000)/2-0.5));
-      const gx1=Math.min(4999,Math.floor((interval.max+5000)/2-0.5));
+      shapeInterval(shape,-MASK_ARENA_HALF+(gy+0.5)*MASK_CELL_METRES,interval);
+      const gx0=Math.max(0,Math.ceil((interval.min+MASK_ARENA_HALF)/MASK_CELL_METRES-0.5));
+      const gx1=Math.min(MASK_GRID_SIZE-1,Math.floor((interval.max+MASK_ARENA_HALF)/MASK_CELL_METRES-0.5));
       if (gx0>gx1) continue;
       const cy=gy>>>8,offset=(gy&255)*WORDS_PER_ROW;
       for (let cx=gx0>>>8;cx<=gx1>>>8;cx++) {
-        const index=cy*20+cx,coverage=this.coverageSlots[index];
+        const index=cy*MASK_CHUNKS_PER_AXIS+cx,coverage=this.coverageSlots[index];
         if (!coverage) {unknown.add(KEYS[index]);continue;}
         let consumed=this.consumedSlots[index];
         const lo=Math.max(0,gx0-cx*256),hi=Math.min(255,gx1-cx*256);
@@ -221,7 +282,7 @@ export class ConsumptionMask {
       for (const key of changed) {this.consumed.get(key).revision=this.consumedRevision;this.dirtyConsumed.add(key);}
     }
     return {newCells,areaM2:newCells*MASK_CELL_AREA_M2,changedChunks:[...changed],unknownChunks:[...unknown],
-      dirtyBounds:newCells?{minX:-5000+minGX*2,minY:-5000+minGY*2,maxX:-5000+(maxGX+1)*2,maxY:-5000+(maxGY+1)*2}:null,
+      dirtyBounds:newCells?{minX:-MASK_ARENA_HALF+minGX*MASK_CELL_METRES,minY:-MASK_ARENA_HALF+minGY*MASK_CELL_METRES,maxX:-MASK_ARENA_HALF+(maxGX+1)*MASK_CELL_METRES,maxY:-MASK_ARENA_HALF+(maxGY+1)*MASK_CELL_METRES}:null,
       complete:gy>last,cursor:gy>last?null:{signature:shape.signature,nextRow:gy},rows,wordsVisited,
       consumedCells:this.consumedCells,consumedAreaM2:this.consumedAreaM2};
   }
@@ -239,9 +300,9 @@ export class ConsumptionMask {
   /** Atomically replaces all consumed chunks from binary IndexedDB records. */
   restoreConsumed(records) {
     if (!records || typeof records[Symbol.iterator]!=='function') throw new TypeError('Expected iterable [key, Uint8Array] records');
-    const consumed=new Map(),slots=new Array(400);let cells=0,entries=0;
+    const consumed=new Map(),slots=new Array(MASK_CHUNK_COUNT);let cells=0,entries=0;
     for (const entry of records) {
-      if (++entries>400 || !Array.isArray(entry) || entry.length!==2 || consumed.has(entry[0])) throw new TypeError('Invalid or duplicate consumed chunk');
+      if (++entries>MASK_CHUNK_COUNT || !Array.isArray(entry) || entry.length!==2 || consumed.has(entry[0])) throw new TypeError('Invalid or duplicate consumed chunk');
       const chunk=copyChunk(entry[0],entry[1]);
       consumed.set(chunk.key,chunk);slots[chunk.index]=chunk;cells+=countMaskBits(chunk.bits);
     }
@@ -251,13 +312,13 @@ export class ConsumptionMask {
   }
   /** JSON-safe, stable snapshot containing consumed bits only; no source feature IDs. */
   serialize() {
-    return {version:MASK_VERSION,cellMetres:2,arenaHalf:5000,chunkSize:256,
+    return {version:MASK_VERSION,cellMetres:MASK_CELL_METRES,arenaHalf:MASK_ARENA_HALF,chunkSize:MASK_CHUNK_SIZE,
       chunks:[...this.consumed.values()].sort((a,b)=>a.index-b.index).map(c=>[c.key,encodeBase64(c.bits)])};
   }
   /** Validates the entire snapshot before replacing current consumed bits. */
   restore(snapshot) {
-    if (!snapshot || snapshot.version!==MASK_VERSION || snapshot.cellMetres!==2 || snapshot.arenaHalf!==5000 || snapshot.chunkSize!==256 ||
-        !Array.isArray(snapshot.chunks) || snapshot.chunks.length>400) throw new TypeError('Incompatible consumption mask snapshot');
+    if (!snapshot || snapshot.version!==MASK_VERSION || snapshot.cellMetres!==MASK_CELL_METRES || snapshot.arenaHalf!==MASK_ARENA_HALF || snapshot.chunkSize!==MASK_CHUNK_SIZE ||
+        !Array.isArray(snapshot.chunks) || snapshot.chunks.length>MASK_CHUNK_COUNT) throw new TypeError('Incompatible consumption mask snapshot');
     const records=snapshot.chunks.map(entry=>{
       if (!Array.isArray(entry) || entry.length!==2) throw new TypeError('Invalid consumed chunk');
       return [entry[0],decodeBase64(entry[1])];
@@ -300,8 +361,8 @@ function decodeBase64(value) {
 export function rasterizeCoverageChunk(key,polygons=[]) {
   const {cx,cy}=parseMaskChunkKey(key),bits=new Uint8Array(MASK_CHUNK_BYTES),union=new Uint32Array(bits.buffer);
   const scratch=new Uint32Array(WORDS_PER_CHUNK),intersections=[];
-  const width=Math.min(256,5000-cx*256),height=Math.min(256,5000-cy*256);
-  const originX=-5000+cx*512,originY=-5000+cy*512;
+  const width=Math.min(256,MASK_GRID_SIZE-cx*MASK_CHUNK_SIZE),height=Math.min(256,MASK_GRID_SIZE-cy*MASK_CHUNK_SIZE);
+  const originX=-MASK_ARENA_HALF+cx*CHUNK_METRES,originY=-MASK_ARENA_HALF+cy*CHUNK_METRES;
   for (const polygon of polygons) {
     if (!Array.isArray(polygon) || !polygon[0]?.length) continue;
     let outerMinX=Infinity,outerMinY=Infinity,outerMaxX=-Infinity,outerMaxY=-Infinity;

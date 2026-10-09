@@ -8,7 +8,7 @@ import {ConsumptionMask, countMaskBits, rasterizeCoverageChunk, maskChunkBounds}
 import {lonLatToLocal} from '../src/geometry.js';
 
 const metadata = {tiles: ['https://tiles.openfreemap.org/planet/fixture/{z}/{x}/{y}.pbf'], minzoom: 0, maxzoom: 14, vector_layers: [{id: 'building'}]};
-const manifest = {id: 'tile-fixture', center: [0, 0], projectionLatitude: 0, arenaSize: 10000};
+const manifest = {id: 'tile-fixture', center: [0, 0], projectionLatitude: 0, arenaSize: 5000};
 const rectangle = (l,t,r,b) => [[l,t],[r,t],[r,b],[l,b],[l,t]];
 const encode = (features = [], extent = 4096) => {
   const bytes = fromGeojsonVt({building: {features: features.map((geometry, index) => ({type: 3, id: index, tags: {}, geometry}))}}, {extent});
@@ -98,19 +98,19 @@ test('decoder honors dynamic extent, courtyard holes and no feature-ID dependenc
   const doubled=rings.map(ring=>ring.map(([x,y])=>[x*2,y*2]));
   const b=decodeBuildingTile(tile(8192,8192,encode([doubled],8192)),manifest);
   assert.deepEqual(a.polygons,b.polygons);assert.equal(a.polygons[0].length,2);
-  const bits=rasterizeCoverageChunk('10,9',a.polygons);assert.ok(countMaskBits(bits)>0);
-  const solid=rasterizeCoverageChunk('10,9',a.polygons.map(p=>[p[0]]));assert.ok(countMaskBits(bits)<countMaskBits(solid));
+  const bits=rasterizeCoverageChunk('5,4',a.polygons);assert.ok(countMaskBits(bits)>0);
+  const solid=rasterizeCoverageChunk('5,4',a.polygons.map(p=>[p[0]]));assert.ok(countMaskBits(bits)<countMaskBits(solid));
 });
 
 test('canonical tile clipping and union raster produce one seam-spanning courtyard, never duplicate reward coverage', () => {
   const rings=[rectangle(-16,20,16,120),rectangle(-8,40,8,100).reverse()];
   const left=rings.map(ring=>ring.map(([x,y])=>[x+4096,y]));
   const tiles=[tile(8191,8192,encode([left,left])),tile(8192,8192,encode([rings,rings]))];
-  const processor=new TileCoverageProcessor(),result=processor.process({key:'9,9',tiles,manifest});
+  const processor=new TileCoverageProcessor(),result=processor.process({key:'4,4',tiles,manifest});
   const toLocal=([x,y])=>lonLatToLocal([x/4096/16384*360,Math.atan(Math.sinh(Math.PI*(1-2*(8192+y/4096)/16384)))*180/Math.PI],manifest.center,0);
-  const expected=rasterizeCoverageChunk('9,9',[rings.map(ring=>ring.map(toLocal))]);
+  const expected=rasterizeCoverageChunk('4,4',[rings.map(ring=>ring.map(toLocal))]);
   assert.deepEqual(result.bits,expected);assert.ok(countMaskBits(result.bits)>0);
-  const reversed=processor.process({key:'9,9',tiles:[...tiles].reverse(),manifest});assert.deepEqual(reversed.bits,result.bits);
+  const reversed=processor.process({key:'4,4',tiles:[...tiles].reverse(),manifest});assert.deepEqual(reversed.bits,result.bits);
 });
 
 test('malformed PBF cannot be interpreted as successful empty coverage', () => {
@@ -146,7 +146,7 @@ test('dispose while source pending aborts and cannot attach stale masks', async 
 
 test('coverage residency stays bounded and renderer receives eviction notifications', async () => {
   const {stream,mask,changes}=streamWith();
-  for(const x of [-4000,-2500,-1000,500,2000,3500])await stream.update([x,0],500,[1,0]);
+  for(const x of [-2500,-1500,-500,500,1500,2500])await stream.update([x,0],500,[1,0]);
   assert.ok(stream.stats.maxCoverageChunks<=36);assert.ok(mask.coverage.size<=36);assert.ok(changes.some(([,bits])=>bits===null));
   assert.ok(stream.source.stats.retainedTiles<=24);assert.ok(stream.stats.retainedDecodedTiles<=24);stream.dispose();
 });
@@ -154,8 +154,8 @@ test('coverage residency stays bounded and renderer receives eviction notificati
 test('radius cap and arena clipping prevent whole-sector or impossible outside loads', async () => {
   const {stream}=streamWith();
   await assert.rejects(stream.prepare([0,0],501));
-  await stream.prepare([4990,4990],500);assert.equal(stream.covers([4990,4990],500),true);
-  for(const key of stream.coverage.keys()){const b=maskChunkBounds(key);assert.ok(b.maxX<=5000&&b.maxY<=5000);}
+  await stream.prepare([2990,2990],500);assert.equal(stream.covers([2990,2990],500),true);
+  for(const key of stream.coverage.keys()){const b=maskChunkBounds(key);assert.ok(b.maxX<=2500&&b.maxY<=2500);}
   assert.ok(stream.coverage.size<=9);stream.dispose();
 });
 
@@ -174,9 +174,9 @@ test('changed desired region never receives obsolete in-flight chunks', async ()
   let release,started;
   const began=new Promise(resolve=>started=resolve),gate=new Promise(resolve=>release=resolve);let first=true;
   const {stream,changes}=streamWith(mockFetch(async()=>{if(first){first=false;started();await gate;}return new Response(encode());}));
-  const old=stream.update([-4000,-4000],18);await began;
-  const newest=stream.update([4000,4000],18);release();await Promise.all([old,newest]);
-  assert.equal(stream.covers([4000,4000],18),true);assert.equal(stream.covers([-4000,-4000],18),false);
+  const old=stream.update([-2400,-2400],18);await began;
+  const newest=stream.update([2400,2400],18);release();await Promise.all([old,newest]);
+  assert.equal(stream.covers([2400,2400],18),true);assert.equal(stream.covers([-2400,-2400],18),false);
   assert.ok(changes.every(([key])=>stream.desired.has(key)));stream.dispose();
 });
 

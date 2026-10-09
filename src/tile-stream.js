@@ -1,21 +1,22 @@
 import {TileSource, NATIVE_ZOOM} from './tile-source.js';
 import {maskChunkBounds, maskChunksForBounds} from './consumption-mask.js';
+import {ARENA_HALF_METRES, RADIUS_CAP_METRES} from './game-config.js';
 
-export const TILE_STREAM_LIMITS = Object.freeze({coverageChunks: 36, radius: 500, initialMargin: 100,
+export const TILE_STREAM_LIMITS = Object.freeze({coverageChunks: 36, radius: RADIUS_CAP_METRES, initialMargin: 100,
   margin: 150, directionLead: 100, tilesPerChunk: 64, workerTimeoutMs: 20000});
 const abortError = () => new DOMException('Загрузка отменена', 'AbortError');
 const metersPerDegree = 6378137 * Math.PI / 180;
 const xy = p => Array.isArray(p) ? p : [p?.x, p?.y];
 function arenaPosition(position, radius) {
   const p = xy(position);
-  if (!p.every(Number.isFinite) || p.some(v => Math.abs(v) > 5000) || !Number.isFinite(radius) || radius < 0 || radius > TILE_STREAM_LIMITS.radius) throw new RangeError('Некорректная позиция или радиус потоковой карты.');
+  if (p.length !== 2 || !p.every(Number.isFinite) || p.some(v => Math.abs(v) > ARENA_HALF_METRES + radius) || !Number.isFinite(radius) || radius < 0 || radius > TILE_STREAM_LIMITS.radius) throw new RangeError('Некорректная позиция или радиус потоковой карты.');
   return p;
 }
 function boxFor(position, radius, margin, direction = [0, 0]) {
   const p = arenaPosition(position, radius), d = xy(direction);
   const length = Math.hypot(...d), lead = length > 0 && Number.isFinite(length) ? d.map(v => v / length * TILE_STREAM_LIMITS.directionLead) : [0, 0];
-  return [Math.max(-5000, p[0] - radius - margin + Math.min(0, lead[0])), Math.max(-5000, p[1] - radius - margin + Math.min(0, lead[1])),
-    Math.min(5000, p[0] + radius + margin + Math.max(0, lead[0])), Math.min(5000, p[1] + radius + margin + Math.max(0, lead[1]))];
+  return [Math.max(-ARENA_HALF_METRES, p[0] - radius - margin + Math.min(0, lead[0])), Math.max(-ARENA_HALF_METRES, p[1] - radius - margin + Math.min(0, lead[1])),
+    Math.min(ARENA_HALF_METRES, p[0] + radius + margin + Math.max(0, lead[0])), Math.min(ARENA_HALF_METRES, p[1] + radius + margin + Math.max(0, lead[1]))];
 }
 export function nativeTilesForBounds(manifest, bounds) {
   const b = Array.isArray(bounds) ? bounds : [bounds.minX, bounds.minY, bounds.maxX, bounds.maxY];

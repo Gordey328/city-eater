@@ -1,9 +1,9 @@
 /** Stable, bounded map selection. Pure helpers; no network or storage writes.
  *
- * Free-map rows are 10 km tall in the game's spherical equirectangular metre
+ * Free-map rows are 5 km tall in the game's spherical equirectangular metre
  * convention. Each row uses an integer number of equal longitude columns, so
  * it closes at the date line without gaps, overlaps, or a clipped final arena.
- * Its fixed projection latitude makes every arena exactly 10,000 × 10,000 m in
+ * Its fixed projection latitude makes every arena exactly 5,000 × 5,000 m in
  * that row's metre basis. It is chosen near the row midpoint, not at a global
  * reference latitude. These are LOCAL PLANAR squares, not geodesic squares:
  * true east–west spherical distance varies slightly across/within a row. Rows
@@ -12,7 +12,7 @@
  * Supplying a campaign selects only its existing sectors, by reference. Saved
  * legacy geometry, IDs and projection conventions are never migrated here.
  */
-import { SECTOR_SIZE } from './city-campaign.js';
+import { ARENA_SIZE_METRES as SECTOR_SIZE } from './game-config.js';
 
 const R = 6378137;
 const DEG = Math.PI / 180;
@@ -22,7 +22,7 @@ const ROWS_PER_HEMISPHERE = Math.floor(84.9 / LATITUDE_STEP);
 const MIN_ROW = -ROWS_PER_HEMISPHERE;
 const MAX_ROW = ROWS_PER_HEMISPHERE - 1;
 const MAX_CAMPAIGN_INPUT = 10000;
-export const MAP_GRID_VERSION = 'world-row-equirectangular-v1';
+export const MAP_GRID_VERSION = 'world-row-equirectangular-5km-v2';
 export const MAP_MAX_LATITUDE = ROWS_PER_HEMISPHERE * LATITUDE_STEP;
 export const MAX_VISIBLE_MAP_CELLS = 400;
 const wrap = longitude => longitude >= -180 && longitude < 180 ? longitude : ((longitude + 180) % 360 + 360) % 360 - 180;
@@ -47,7 +47,7 @@ function rowGeometry(row) {
   const north = (row + 1) * LATITUDE_STEP;
   const midpoint = (south + north) / 2;
   const columns = Math.min(Math.floor(CIRCUMFERENCE / SECTOR_SIZE), Math.max(1, Math.round(CIRCUMFERENCE * Math.cos(midpoint * DEG) / SECTOR_SIZE)));
-  // Integer columns close the circle; this exact basis preserves 10 km arenas.
+  // Integer columns close the circle; this exact basis preserves 5 km arenas.
   const projectionLatitude = Math.sign(midpoint) * Math.acos(columns * SECTOR_SIZE / CIRCUMFERENCE) / DEG;
   return { row, south, north, midpoint, columns, projectionLatitude };
 }
@@ -56,9 +56,9 @@ function worldCell(row, col) {
   const grid = rowGeometry(row);
   const west = -180 + col * 360 / grid.columns;
   const east = -180 + (col + 1) * 360 / grid.columns;
-  const campaignId = `map-v1-r${row}-c${col}`;
+  const campaignId = `map-5km-v2-r${row}-c${col}`;
   return {
-    id: `${campaignId}/s0-0`, campaignId, title: 'Район 10 × 10 км',
+    id: `${campaignId}/s0-0`, campaignId, title: 'Район 5 × 5 км',
     center: [(west + east) / 2, grid.midpoint],
     bounds: [west, grid.south, east, grid.north],
     arenaSize: SECTOR_SIZE, projectionLatitude: grid.projectionLatitude,
@@ -173,7 +173,7 @@ function intersectsViewport(cell, viewport) {
 
 /** Bounded all-or-none visible grid. Too-dense views return no arbitrary sample.
  * Bounds may cross ±180°, span the world, or use unwrapped MapLibre longitudes.
- * At most 1,890 row descriptors are considered before allocating any cells.
+ * At most 3,780 row descriptors are considered before allocating any cells.
  */
 export function getVisibleMapCells(bounds, { campaign = null, maxCells = MAX_VISIBLE_MAP_CELLS } = {}) {
   if (!Number.isSafeInteger(maxCells) || maxCells < 1 || maxCells > MAX_CAMPAIGN_INPUT) throw new RangeError('Предел видимых районов: от 1 до 10000.');
@@ -219,11 +219,11 @@ export function mapCellFeature(cell, properties = {}) {
  * Look up campaignId in storage first to retain saved progress. Titles are only
  * presentation and cannot change the square's identity or projection.
  */
-export function makeMapCellCampaign(cell, { title = 'Район 10 × 10 км' } = {}) {
+export function makeMapCellCampaign(cell, { title = 'Район 5 × 5 км' } = {}) {
   if (cell?.gridVersion !== MAP_GRID_VERSION || !Number.isSafeInteger(cell.gridRow) || !Number.isSafeInteger(cell.gridColumn)) throw new TypeError('Нужен район мировой сетки.');
   if (cell.gridRow < MIN_ROW || cell.gridRow > MAX_ROW || cell.gridColumn < 0 || cell.gridColumn >= rowGeometry(cell.gridRow).columns) throw new RangeError('Район вне мировой сетки.');
   const canonical = worldCell(cell.gridRow, cell.gridColumn);
-  const label = String(title).trim().slice(0, 120) || 'Район 10 × 10 км';
+  const label = String(title).trim().slice(0, 120) || 'Район 5 × 5 км';
   const sector = { ...canonical, title: label };
   return {
     id: canonical.campaignId, schemaVersion: 2, gridVersion: MAP_GRID_VERSION,
