@@ -56,7 +56,7 @@ export function makeBoundaryQuery(center) {
  * Server maxsize is a memory budget, NOT a response-size limit. The caller must
  * separately cap received bytes and honor cancellation/cooldowns.
  */
-export function makeSectorQuery(sector) {
+export function makeSectorQuery(sector, {includeBackground = true} = {}) {
   normalizeCoordinate(sector?.center); // Validate without rounding a grid centre.
   const center = [wrap(sector.center[0]), sector.center[1]];
   if (sector?.arenaSize !== undefined && sector.arenaSize !== SECTOR_SIZE) throw new RangeError('Запрашивать можно только один сектор 10 × 10 км.');
@@ -66,11 +66,13 @@ export function makeSectorQuery(sector) {
   const boxes = west <= east ? [[south, west, north, east]] : [[south, west, north, 180], [south, -180, north, east]];
   const filters = [
     'wr["building"]["building"!="no"]',
+    ...(includeBackground ? [
     'way["highway"]',
     'wr["natural"~"^(water|wood|wetland|scrub|grassland)$"]',
     'wr["landuse"~"^(forest|grass|meadow|recreation_ground|village_green|allotments|orchard|farmland|reservoir|basin)$"]',
     'wr["leisure"~"^(park|garden|golf_course|nature_reserve|recreation_ground)$"]',
     'way["waterway"]',
+    ] : []),
   ];
   return '[out:json][timeout:60][maxsize:134217728];\n(\n' + boxes.flatMap(box => filters.map(filter => `${filter}(${box.join(',')});`)).join('\n') + '\n);\nout body geom;';
 }

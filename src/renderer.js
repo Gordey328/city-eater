@@ -12,9 +12,10 @@ export class MapRenderer {
     window.addEventListener('resize',()=>this.resize());this.resize();
   }
   resize(){this.width=innerWidth;this.height=innerHeight;const d=Math.min(devicePixelRatio||1,this.quality==='low'?1:2);this.canvas.width=this.width*d;this.canvas.height=this.height*d;this.canvas.style.width=`${this.width}px`;this.canvas.style.height=`${this.height}px`;this.ctx.setTransform(d,0,0,d,0,0);this.map?.resize();}
+  dispose(){this.loadGeneration=(this.loadGeneration||0)+1;this.cancelLoad?.();this.cancelLoad=null;clearTimeout(this.dataTimer);this.dataTimer=null;this.pendingRepository=null;this.ready=false;this.map?.remove();this.map=null;this.ctx.clearRect(0,0,this.width,this.height);}
   async load(manifest,base,run=null){
     const generation=(this.loadGeneration||0)+1;this.loadGeneration=generation;this.cancelLoad?.();
-    this.manifest=manifest;this.ready=false;clearTimeout(this.dataTimer);this.dataTimer=null;this.pendingFeatures=null;this.pendingRepository=null;this.lastRadius=null;this.map?.remove();
+    this.manifest=manifest;this.ready=false;clearTimeout(this.dataTimer);this.dataTimer=null;this.pendingFeatures=null;this.pendingRepository=null;this.lastRadius=null;this.map?.remove();this.map=null;
     const style=createMapStyle(manifest,base);
     this.map=new maplibregl.Map({container:'map',style,center:mapCoordinates(run?.position||manifest.spawn||[0,0],manifest),zoom:cameraMetrics(run?.radius||manifest.initialRadius||18,this.width,this.height,manifest.projectionLatitude===undefined?manifest.center[1]:mapCoordinates(run?.position||manifest.spawn||[0,0],manifest)[1],manifest.projectionLatitude).zoom,minZoom:0,maxZoom:19,pitch:0,bearing:0,interactive:false,attributionControl:{compact:true},canvasContextAttributes:{antialias:true},fadeDuration:0});
     const map=this.map;

@@ -1,0 +1,18 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {WorldOverview,overviewProject,overviewUnproject} from '../src/world-overview.js';
+const context=new Proxy({}, {get:(_,name)=>()=>{},set:()=>true});
+class Element {
+ constructor(){this.listeners={};this.children=[];this.style={};this.clientWidth=500;this.clientHeight=226;}
+ replaceChildren(...a){this.children=a;}append(...a){this.children.push(...a);}setAttribute(){}setPointerCapture(){}
+ getBoundingClientRect(){return {left:0,top:0,width:500,height:226};}getContext(){return context;}
+ addEventListener(name,fn,options){(this.listeners[name]??=[]).push(fn);options?.signal?.addEventListener('abort',()=>{this.listeners[name]=this.listeners[name].filter(x=>x!==fn)});}
+ dispatch(name,args={}){for(const fn of this.listeners[name]||[])fn({type:name,pointerId:1,clientX:250,clientY:113,preventDefault(){},...args});}
+}
+globalThis.document=Object.assign(new Element(),{hidden:false,visibilityState:'visible',createElement:()=>new Element()});globalThis.window=new Element();globalThis.devicePixelRatio=1;globalThis.ResizeObserver=class{observe(){}disconnect(){this.disconnected=true}};
+function setup(){const selections=[],container=new Element(),map=new WorldOverview(container,{features:[]},[30,35],p=>selections.push(p));return{map,selections,container};}
+test('real overview centre click selects geographic centre, pan does not select',()=>{const {map,selections}=setup();map.canvas.dispatch('pointerdown');map.canvas.dispatch('pointerup');assert.ok(Math.abs(selections[0][0]-30)<1e-9);assert.ok(Math.abs(selections[0][1]-35)<1e-9);map.canvas.dispatch('pointerdown');map.canvas.dispatch('pointermove',{clientX:350});map.canvas.dispatch('pointerup',{clientX:350});assert.equal(selections.length,1);assert.ok(Math.abs(overviewUnproject(map.center)[0]-12.421875)<1e-9);map.remove();});
+test('overview cancellation and multipointer gesture do not select accidentally',()=>{const {map,selections}=setup();map.canvas.dispatch('pointerdown');map.canvas.dispatch('pointercancel');assert.equal(map.points.size,0);map.canvas.dispatch('pointerdown',{clientX:200});map.canvas.dispatch('pointerdown',{pointerId:2,clientX:300});map.canvas.dispatch('pointermove',{pointerId:2,clientX:400});assert.ok(map.zoom>2);map.canvas.dispatch('pointerup',{pointerId:2,clientX:400});map.canvas.dispatch('pointerup',{clientX:200});assert.equal(selections.length,0);map.remove();});
+test('overview wheel is bounded, resize works, and removal detaches event listeners',()=>{const {map,container}=setup();map.canvas.dispatch('wheel',{deltaY:-100000});assert.equal(map.zoom,16);map.canvas.dispatch('wheel',{deltaY:100000});assert.equal(map.zoom,1);container.clientWidth=390;map.resize();assert.equal(map.canvas.width,390);map.remove();assert.equal(container.children.length,0);assert.equal(map.observer.disconnected,true);assert.equal(map.canvas.listeners.pointerdown.length,0);});
+
+test('overview lost capture and window interruption clear gestures without selecting',()=>{for(const kind of ['capture','blur','visibility']){const {map,selections}=setup(),before=[...map.center];map.canvas.dispatch('pointerdown');if(kind==='capture')map.canvas.dispatch('lostpointercapture');else if(kind==='blur')window.dispatch('blur');else{document.hidden=true;document.visibilityState='hidden';document.dispatch('visibilitychange');document.hidden=false;document.visibilityState='visible';}assert.equal(map.points.size,0,kind);map.canvas.dispatch('pointermove',{clientX:350});assert.deepEqual(map.center,before);assert.equal(selections.length,0);map.remove();}});

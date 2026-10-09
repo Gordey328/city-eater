@@ -7,6 +7,7 @@ export function compatibleSectorCache(record,sector){
   const halfLongitude=5000/(6378137*Math.PI/180*Math.cos(expectedBasis*Math.PI/180));
   const crossesDateLine=Math.abs(sector.center[0])+halfLongitude>180;
   return Boolean(
+    (m.dataCoverage?.buildingIndex===undefined||m.dataCoverage.buildingIndex==='complete')&&
     (!crossesDateLine||m.geometryWrap==='sector-center')&&record.id===sector.id&&m.id===sector.id&&m.arenaSize===10000&&m.chunkSize===1000&&Array.isArray(m.chunks)&&
     Number.isFinite(basis)&&Math.abs(basis)<=84.9&&Number.isFinite(expectedBasis)&&Math.abs(basis-expectedBasis)<1e-9&&
     m.center.every((v,i)=>Number.isFinite(v)&&Number.isFinite(sector.center[i])&&Math.abs(v-sector.center[i])<1e-7)&&

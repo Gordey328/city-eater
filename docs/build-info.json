@@ -1,7 +1,7 @@
 {
   "name": "CITY EATER",
-  "version": "0.6.2",
-  "sourceSha256": "941b95533682b83cce1e22f225cfcb1f66f84f0cf800b1a25e5fe6239533f034",
+  "version": "0.7.0",
+  "sourceSha256": "1f02af460a73c5bf4f3fdd773e0da23cab6d51f4ebe2a60c7d98a26d1111cd41",
   "dataVersions": {
     "pushkin": "osm-20261009T114620Z-96ad336616-v1",
     "gatchina": "osm-20261009T114720Z-bc0c4dd0ab-v1"

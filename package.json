@@ -1,6 +1,6 @@
 {
   "name": "city-eater",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "description": "A single-player city swallowing game built on real OpenStreetMap geometry",
