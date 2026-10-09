@@ -39,6 +39,99 @@ test('way footprints keep OSM IDs, exact metre area, north-up projection and con
   assert.equal(result.manifest.pmtiles, undefined);
 });
 
+test('shared city projection latitude governs sector area, inverse geometry, boundaries and chunk cells', () => {
+  const sharedSector = {...sector, center: [30, 61], projectionLatitude: 60};
+  const metresPerDegree = 6378137 * Math.PI / 180;
+  // Independent reference formula: do not generate this fixture with the
+  // helper under test or an ignored projectionLatitude could go undetected.
+  const cityGeometry = (points) => points.map(([x, y]) => ({
+    lon: sharedSector.center[0] + x / (metresPerDegree * Math.cos(sharedSector.projectionLatitude * Math.PI / 180)),
+    lat: sharedSector.center[1] + y / metresPerDegree,
+  }));
+  const cityWay = (id, points, tags = {building: 'yes'}) => ({type: 'way', id, tags, geometry: cityGeometry(points)});
+  const source = payload([
+    cityWay(1, rectangle(0, 0, 100, 200)),
+    cityWay(2, rectangle(4990, 0, 5000, 10)),
+    cityWay(3, rectangle(5001, 0, 5011, 10)),
+    cityWay(4, rectangle(995, 20, 1015, 40)),
+    cityWay(5, rectangle(2000, 2000, 2100, 2100), {leisure: 'park'}),
+  ]);
+  const result = normalizeOSMSector(source, sharedSector);
+  assert.deepEqual(buildingsOf(result).map((b) => b.id).sort(), ['w1', 'w2', 'w4']);
+  assert.equal(result.provenance.metrics.excluded.boundaryExcluded, 1);
+  assert.equal(result.manifest.totalBuildingArea, 20500);
+  assert.equal(result.manifest.projectionLatitude, 60);
+  assert.equal(result.manifest.projection.projectionLatitude, 60);
+  assert.equal(result.provenance.projectionLatitude, 60);
+  const building = result.chunks['6-5'].buildings.find((b) => b.id === 'w4');
+  assert.ok(building, 'centre 1005m belongs to column6 in the shared metric basis');
+  near(building.center[0], 1005);
+  near(building.center[1], 30);
+  near(building.area, 400);
+  near(building.radius, Math.hypot(10, 10) + 0.005);
+  const first = buildingsOf(result).find((b) => b.id === 'w1');
+  near(Math.max(...first.geometry.coordinates[0][0].map((p) => p[0])), source.elements[0].geometry[1].lon, 1e-12);
+  near(result.manifest.bounds[0], sharedSector.center[0] - 5000 / (metresPerDegree * 0.5), 1e-10);
+  near(result.manifest.bounds[2], sharedSector.center[0] + 5000 / (metresPerDegree * 0.5), 1e-10);
+  const park = result.background.data.features.find((feature) => feature.id === 'w5');
+  near(Math.max(...park.geometry.coordinates[0][0].map((p) => p[0])), source.elements[4].geometry[1].lon, 1e-12);
+});
+
+test('projection basis is versioned even for empty sectors, while the missing basis uses legacy centre latitude', () => {
+  const empty = payload([]);
+  const implicit = normalizeOSMSector(empty, sector);
+  const explicit = normalizeOSMSector(empty, {...sector, projectionLatitude: sector.center[1]});
+  const differentBasis = normalizeOSMSector(empty, {...sector, projectionLatitude: sector.center[1] - 1});
+  assert.equal(implicit.manifest.version, explicit.manifest.version);
+  assert.notEqual(implicit.manifest.version, differentBasis.manifest.version);
+  assert.equal(implicit.manifest.projectionLatitude, sector.center[1]);
+  for (const projectionLatitude of [null, NaN, Infinity, 86, -86, '60']) {
+    assert.throws(() => normalizeOSMSector(empty, {...sector, projectionLatitude}), errorCode('INVALID_SECTOR'));
+  }
+});
+
+test('dateline GeoJSON remains narrow on both world edges, including courtyard relations and background lines', () => {
+  const geometryPoints = (coordinates) => typeof coordinates[0] === 'number' ? [coordinates] : coordinates.flatMap(geometryPoints);
+  for (const longitude of [179.999, -179.999]) {
+    const dateSector = {...sector, center: [longitude, 10], projectionLatitude: 10};
+    const dateGeometry = (points) => points.map((point) => {
+      const [lon, lat] = localToLonLat(point, dateSector.center, dateSector.projectionLatitude);
+      return {lon, lat};
+    });
+    const dateWay = (id, points, tags) => ({type: 'way', id, tags, geometry: dateGeometry(points)});
+    const dateMember = (ref, points, role) => ({type: 'way', ref, role, geometry: dateGeometry(points)});
+    const source = payload([
+      dateWay(1, rectangle(-300, 1000, 300, 1020), {building: 'yes'}),
+      dateWay(2, [[-500, 500], [500, 500]], {highway: 'residential'}),
+      dateWay(3, rectangle(-500, 2000, 500, 2100), {natural: 'water'}),
+      dateWay(4, [[-500, 2500], [500, 2600]], {waterway: 'stream'}),
+      relation(10, [dateMember(11, rectangle(-600, -1000, 600, -500), 'outer'),
+        dateMember(12, rectangle(-200, -900, 200, -600), 'inner')], {type: 'multipolygon', leisure: 'park'}),
+      relation(20, [dateMember(21, rectangle(-400, -200, 400, 200), 'outer'),
+        dateMember(22, rectangle(-200, -50, 200, 50), 'inner')]),
+    ]);
+    const before = JSON.stringify(source), result = normalizeOSMSector(source, dateSector);
+    assert.equal(JSON.stringify(source), before, 'temporary converter continuity must never mutate caller data');
+    assert.equal(result.manifest.geometryWrap, 'sector-center');
+    assert.equal(result.manifest.buildingCount, 2);
+    assert.equal(result.manifest.totalBuildingArea, 292000);
+    const courtyard = buildingsOf(result).find((building) => building.id === 'r20');
+    assert.equal(courtyard.polygons[0].length, 2);
+    assert.equal(courtyard.area, 280000);
+    assert.equal(result.background.data.features.find((feature) => feature.id === 'r10').geometry.coordinates[0].length, 2);
+    assert.equal(result.background.data.features.filter((feature) => feature.geometry.type === 'LineString').length, 2);
+    const geometries = [...buildingsOf(result).map((b) => b.geometry), ...result.background.data.features.map((f) => f.geometry)];
+    for (const geometry of geometries) {
+      const points = geometryPoints(geometry.coordinates), longitudes = points.map((p) => p[0]);
+      assert.ok(Math.max(...longitudes) - Math.min(...longitudes) < 0.02, 'render geometry must not span nearly360°');
+      assert.ok(longitudes.every((lng) => Math.abs(lng - longitude) < 0.02));
+    }
+    assert.ok(geometries.some((geometry) => geometryPoints(geometry.coordinates).some((point) => Math.abs(point[0]) > 180)),
+      'nearest-world-copy rendering deliberately permits longitude beyond±180');
+    assert.equal(result.manifest.version, normalizeOSMSector(payload([...source.elements].reverse()), dateSector).manifest.version);
+  }
+});
+
 test('multipolygon relations retain every component and courtyard and suppress member ways', () => {
   const outer = rectangle(-30, -30, 30, 30), inner = rectangle(-10, -10, 10, 10), second = rectangle(100, 100, 110, 110);
   const source = payload([
@@ -335,6 +428,10 @@ test('worker protocol reports progress, results, errors and echoes request IDs',
     const result = sent.find((message) => message.type === 'result');
     assert.equal(result.requestId, 'fixture');
     assert.equal(result.result.manifest.suitability.status, 'empty');
+    sent.length = 0;
+    listener({data: {type: 'normalize', requestId: 'shared-city-metric', payload: payload([]), sector: {...sector, center: [30, 61], projectionLatitude: 60}}});
+    assert.equal(sent.at(-1).type, 'result');
+    assert.equal(sent.at(-1).result.manifest.projectionLatitude, 60);
     sent.length = 0;
     listener({data: {type: 'normalize', requestId: 'bad', payload: {}, sector}});
     assert.equal(sent.at(-1).type, 'error');

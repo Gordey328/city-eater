@@ -3,8 +3,22 @@ const R = 6378137;
 const DEG = Math.PI / 180;
 export const SECTOR_SIZE = 10000;
 export const MAX_CAMPAIGN_SECTORS = 1600;
+export const CAMPAIGN_GRID_VERSION = 'city-equirectangular-v2';
 const round = value => Math.round(value * 1e7) / 1e7;
 const wrap = value => ((value + 180) % 360 + 360) % 360 - 180;
+
+function validatedProjectionLatitude(value) {
+  if (!Number.isFinite(value) || Math.abs(value) > 84.9) throw new RangeError('Некорректная широта проекции города.');
+  return value;
+}
+
+function metricBounds(center, widthKm, heightKm, projectionLatitude = center[1]) {
+  const halfLat = heightKm * 500 / (R * DEG);
+  const halfLon = widthKm * 500 / (R * DEG * Math.cos(validatedProjectionLatitude(projectionLatitude) * DEG));
+  const bounds = [wrap(center[0] - halfLon), center[1] - halfLat, wrap(center[0] + halfLon), center[1] + halfLat];
+  normalizeBounds(bounds);
+  return bounds;
+}
 
 export function normalizeCoordinate(center) {
   if (!Array.isArray(center) || center.length !== 2 || !center.every(Number.isFinite)) throw new TypeError('Укажи долготу и широту числами.');
@@ -26,14 +40,10 @@ export function normalizeBounds(bounds) {
 export function deriveManualBounds(center, widthKm = 20, heightKm = 20) {
   center = normalizeCoordinate(center);
   if (![widthKm, heightKm].every(value => Number.isFinite(value) && value >= 1 && value <= 1000)) throw new RangeError('Размер области: от 1 до 1000 км по каждой стороне.');
-  const halfLat = heightKm * 500 / (R * DEG);
-  const halfLon = widthKm * 500 / (R * DEG * Math.cos(center[1] * DEG));
   // Preserve metric dimensions. Rounding edges to 1e-7 degrees can expand an
   // exact 10 km selection by millimetres and incorrectly allocate another row
   // or column. Campaign identity separately rounds its hash inputs.
-  const bounds = [wrap(center[0] - halfLon), center[1] - halfLat, wrap(center[0] + halfLon), center[1] + halfLat];
-  normalizeBounds(bounds);
-  return bounds;
+  return metricBounds(center, widthKm, heightKm);
 }
 
 /** Candidate metadata only. A bounding box is not the administrative polygon. */
@@ -47,9 +57,11 @@ export function makeBoundaryQuery(center) {
  * separately cap received bytes and honor cancellation/cooldowns.
  */
 export function makeSectorQuery(sector) {
-  const center = normalizeCoordinate(sector?.center);
+  normalizeCoordinate(sector?.center); // Validate without rounding a grid centre.
+  const center = [wrap(sector.center[0]), sector.center[1]];
   if (sector?.arenaSize !== undefined && sector.arenaSize !== SECTOR_SIZE) throw new RangeError('Запрашивать можно только один сектор 10 × 10 км.');
-  const bounds = deriveManualBounds(center, 10.2, 10.2);
+  const projectionLatitude = sector.projectionLatitude ?? center[1];
+  const bounds = metricBounds(center, 10.2, 10.2, projectionLatitude);
   const [west, south, east, north] = bounds;
   const boxes = west <= east ? [[south, west, north, east]] : [[south, west, north, 180], [south, -180, north, east]];
   const filters = [
@@ -91,11 +103,12 @@ function hash(value) {
 
 /**
  * A city campaign covers its chosen extent with complete 10 km × 10 km arenas.
- * Rows share exact latitude edges. Each row uses its midpoint latitude for the
- * same local-equirectangular metre convention as gameplay. Longitude edges join
- * exactly within a row; rows can have different column counts. There is no
- * positive-area overlap or uncovered area inside the chosen extent. Edge cells
- * extend beyond it. An administrative envelope includes some surrounding land.
+ * Every row and column shares one city-local equirectangular metre basis at the
+ * chosen envelope's midpoint latitude. Adjacent cells reuse identical edges, preserving
+ * a rectangular grid: manual 20 × 20 km has exactly four sectors. Sector local
+ * origins differ, but projectionLatitude stays fixed throughout the campaign.
+ * Complete edge cells extend beyond irregular-sized administrative envelopes.
+ * Old saved campaign objects are not migrated or rewritten by this function.
  */
 export function makeCampaign({ name, title: requestedTitle, center, bounds, boundaryId = null, source, coverageKind, maxSectors = MAX_CAMPAIGN_SECTORS }) {
   source = source || (coverageKind === 'osm-boundary-envelope' ? 'osm-boundary-bbox' : 'manual');
@@ -105,29 +118,35 @@ export function makeCampaign({ name, title: requestedTitle, center, bounds, boun
   if (source === 'osm-boundary-bbox' && !/^r[1-9]\d*$/.test(String(boundaryId))) throw new TypeError('Для границ OSM нужен идентификатор отношения.');
   if (!Number.isSafeInteger(maxSectors) || maxSectors < 1 || maxSectors > 10000) throw new RangeError('Некорректный предел числа секторов.');
   const [west, south, east, north] = extent;
+  // A second click inside the same administrative boundary must not redefine
+  // its metric grid or lose progress. The envelope supplies the stable basis;
+  // the selected point controls only which sector is offered first.
+  const projectionLatitude = round((south + north) / 2);
   const dLat = SECTOR_SIZE / (R * DEG);
+  const dLon = SECTOR_SIZE / (R * DEG * Math.cos(projectionLatitude * DEG));
   const rows = Math.ceil((north - south) / dLat - 1e-10);
+  const columns = Math.ceil((east - west) / dLon - 1e-10);
   if (rows > maxSectors || south + rows * dLat > 84.95) throw new RangeError('Область слишком большая или близка к полюсу. Уточни её границы.');
-  const id = `city-${boundaryId || 'manual'}-${hash(JSON.stringify(bounds.map(round)))}`;
+  if (rows * columns > maxSectors) throw new RangeError(`В области больше ${maxSectors} секторов. Выбери меньшие границы, не весь регион.`);
+  const id = `city-v2-${boundaryId || 'manual'}-${hash(JSON.stringify({bounds: bounds.map(round), projectionLatitude: round(projectionLatitude)}))}`;
   const title = String(name || requestedTitle || 'Выбранная область').trim().slice(0, 120) || 'Выбранная область';
+  const latitudeEdges = Array.from({length: rows + 1}, (_, row) => south + row * dLat);
+  const longitudeEdges = Array.from({length: columns + 1}, (_, col) => west + col * dLon);
   const sectors = [];
   for (let row = 0; row < rows; row++) {
-    const s = south + row * dLat, n = s + dLat, lat = (s + n) / 2;
-    const dLon = SECTOR_SIZE / (R * DEG * Math.cos(lat * DEG));
-    const columns = Math.ceil((east - west) / dLon - 1e-10);
-    if (sectors.length + columns > maxSectors) throw new RangeError(`В области больше ${maxSectors} секторов. Выбери меньшие границы, не весь регион.`);
+    const s = latitudeEdges[row], n = latitudeEdges[row + 1], lat = (s + n) / 2;
     for (let col = 0; col < columns; col++) {
-      const w = west + col * dLon, e = w + dLon;
-      sectors.push({ id: `${id}/s${row}-${col}`, campaignId: id, title: `${title} · ${row + 1}:${col + 1}`, center: [wrap((w + e) / 2), lat], bounds: [wrap(w), s, wrap(e), n], arenaSize: SECTOR_SIZE, row, col });
+      const w = longitudeEdges[col], e = longitudeEdges[col + 1];
+      sectors.push({ id: `${id}/s${row}-${col}`, campaignId: id, title: `${title} · ${row + 1}:${col + 1}`, center: [wrap((w + e) / 2), lat], projectionLatitude, gridVersion: CAMPAIGN_GRID_VERSION, bounds: [wrap(w), s, wrap(e), n], arenaSize: SECTOR_SIZE, row, col });
     }
   }
   const distance = sector => {
-    const dx = wrap(sector.center[0] - center[0]) * Math.cos(center[1] * DEG);
+    const dx = wrap(sector.center[0] - center[0]) * Math.cos(projectionLatitude * DEG);
     return dx * dx + (sector.center[1] - center[1]) ** 2;
   };
   sectors.sort((a, b) => distance(a) - distance(b) || a.row - b.row || a.col - b.col);
   sectors.forEach((sector, index) => { sector.index = index; });
-  return { id, schemaVersion: 1, title, center, bounds: [...bounds], source, coverageKind: source === 'osm-boundary-bbox' ? 'osm-boundary-envelope' : 'manual', boundaryId, extentLabel: source === 'osm-boundary-bbox' ? 'Прямоугольник административных границ OSM' : 'Область, выбранная вручную', boundaryIsPolygon: false, sectorSize: SECTOR_SIZE, rows, sectorCount: sectors.length, sectors };
+  return { id, schemaVersion: 2, gridVersion: CAMPAIGN_GRID_VERSION, projectionLatitude, title, center, bounds: [...bounds], source, coverageKind: source === 'osm-boundary-bbox' ? 'osm-boundary-envelope' : 'manual', boundaryId, extentLabel: source === 'osm-boundary-bbox' ? 'Прямоугольник административных границ OSM' : 'Область, выбранная вручную', boundaryIsPolygon: false, sectorSize: SECTOR_SIZE, rows, columns, sectorCount: sectors.length, sectors };
 }
 
 /** Lazy progress: unprepared sectors have no known building-area denominator. */
@@ -143,4 +162,12 @@ export function summarizeCampaign(campaign, progress = {}) {
     }
   }
   return { completed, total: campaign.sectors.length, prepared, consumedArea, knownTotalArea, completionPercent: campaign.sectors.length ? completed / campaign.sectors.length * 100 : 0, knownAreaPercent: knownTotalArea ? consumedArea / knownTotalArea * 100 : 0, wholeCityAreaKnown: prepared === campaign.sectors.length };
+}
+
+/** Display sizes in the saved campaign basis; absent third arg preserves legacy. */
+export function coverageDimensions(bounds, center, projectionLatitude = center?.[1]) {
+  const [west, south, east, north] = normalizeBounds(bounds);
+  normalizeCoordinate(center);
+  const latitude = validatedProjectionLatitude(projectionLatitude);
+  return { widthKm: (east - west) * DEG * R * Math.cos(latitude * DEG) / 1000, heightKm: (north - south) * DEG * R / 1000 };
 }

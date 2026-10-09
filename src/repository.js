@@ -10,7 +10,7 @@ export class BuildingRepository {
   setViewport(width,height){this.viewport=[Math.max(1,width),Math.max(1,height)];}
   chunkBounds(c){return c.bbox || [-5000+c.x*this.manifest.chunkSize,-5000+c.y*this.manifest.chunkSize,-5000+(c.x+1)*this.manifest.chunkSize,-5000+(c.y+1)*this.manifest.chunkSize];}
   required(position,radius,direction=[0,0]) {
-    const view=streamingExtent(radius,...this.viewport,this.manifest.center?.[1]??60),lead=Math.min(400,Math.max(view.x,view.y)*.2),bounds=[position[0]-view.x+Math.min(0,direction[0]*lead),position[1]-view.y+Math.min(0,direction[1]*lead),position[0]+view.x+Math.max(0,direction[0]*lead),position[1]+view.y+Math.max(0,direction[1]*lead)];
+    const view=streamingExtent(radius,...this.viewport,(this.manifest.center?.[1]??60)+position[1]/(6378137*Math.PI/180),this.manifest.projectionLatitude??this.manifest.center?.[1]??60),lead=Math.min(400,Math.max(view.x,view.y)*.2),bounds=[position[0]-view.x+Math.min(0,direction[0]*lead),position[1]-view.y+Math.min(0,direction[1]*lead),position[0]+view.x+Math.max(0,direction[0]*lead),position[1]+view.y+Math.max(0,direction[1]*lead)];
     return this.manifest.chunks.filter(c=>{const box=this.chunkBounds(c);return box[0]<=bounds[2]&&box[2]>=bounds[0]&&box[1]<=bounds[3]&&box[3]>=bounds[1];});
   }
   async update(position,radius,direction=[0,0]) {

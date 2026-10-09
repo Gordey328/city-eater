@@ -18,17 +18,19 @@ const distance = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const validPoint = (p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]);
 const longitudeDelta = (value) => ((value + 180) % 360 + 360) % 360 - 180;
+/** Longitude in the nearest world copy around a map/city reference. */
+export const unwrapLongitude = (longitude, reference) => reference + longitudeDelta(longitude - reference);
 
-/** Project WGS84 [longitude, latitude] around a fixed city centre. */
-export function lonLatToLocal([lng, lat], [centerLng, centerLat]) {
-  const cosLat = Math.max(1e-8, Math.cos(centerLat * DEG));
+/** Project WGS84 around an origin; sectors may share a city-wide metric latitude. */
+export function lonLatToLocal([lng, lat], [centerLng, centerLat], projectionLatitude = centerLat) {
+  const cosLat = Math.max(1e-8, Math.cos(projectionLatitude * DEG));
   return [longitudeDelta(lng - centerLng) * DEG * EARTH_RADIUS * cosLat,
     (lat - centerLat) * DEG * EARTH_RADIUS];
 }
 
 /** Inverse of lonLatToLocal; longitude is normalized to [-180, 180). */
-export function localToLonLat([x, y], [centerLng, centerLat]) {
-  const cosLat = Math.max(1e-8, Math.cos(centerLat * DEG));
+export function localToLonLat([x, y], [centerLng, centerLat], projectionLatitude = centerLat) {
+  const cosLat = Math.max(1e-8, Math.cos(projectionLatitude * DEG));
   return [longitudeDelta(centerLng + x / (EARTH_RADIUS * cosLat * DEG)),
     centerLat + y / (EARTH_RADIUS * DEG)];
 }

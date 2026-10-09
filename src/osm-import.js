@@ -35,7 +35,7 @@ const finiteCoordinate = (p) => Array.isArray(p) && p.length >= 2 &&
   Number.isFinite(p[0]) && Number.isFinite(p[1]) && Math.abs(p[0]) <= 180 && Math.abs(p[1]) <= 90;
 const toBBox = (bounds) => [bounds.minX, bounds.minY, bounds.maxX, bounds.maxY];
 const geometryKey = (geometry) => JSON.stringify(geometry.coordinates);
-const toLocalPolygons = (coordinates, center) => coordinates.map((polygon) => polygon.map((ring) => ring.map((point) => lonLatToLocal(point, center))));
+const toLocalPolygons = (coordinates, center, projectionLatitude) => coordinates.map((polygon) => polygon.map((ring) => ring.map((point) => lonLatToLocal(point, center, projectionLatitude))));
 
 export class OSMImportError extends Error {
   constructor(code, message) {
@@ -47,14 +47,58 @@ export class OSMImportError extends Error {
 
 function fail(code, message) { throw new OSMImportError(code, message); }
 
+function longitudeAroundCenter(longitude, centerLongitude) {
+  if (longitude - centerLongitude > 180) return longitude - 360;
+  if (longitude - centerLongitude < -180) return longitude + 360;
+  return longitude;
+}
+
+function visitGeometryPoints(coordinates, visitor) {
+  if (!Array.isArray(coordinates)) return;
+  if (typeof coordinates[0] === 'number') visitor(coordinates);
+  else for (const child of coordinates) visitGeometryPoints(child, visitor);
+}
+
+/** Give the converter continuous rings for courtyard assignment, then restore
+ * exact source longitudes before metric normalization. Only dateline sectors
+ * take this path; ordinary imports incur no extra source traversal or copies. */
+function convertOSM(elements, centerLongitude, crossesDateLine) {
+  if (!crossesDateLine) return osmtogeojson({elements}, {flatProperties: false});
+  const changed = [], originalByContinuousPoint = new Map();
+  const shift = (point) => {
+    if (!point || !Number.isFinite(point.lon)) return;
+    const original = point.lon, longitude = longitudeAroundCenter(original, centerLongitude);
+    if (longitude === original) return;
+    changed.push([point, original]);
+    point.lon = longitude;
+    originalByContinuousPoint.set(JSON.stringify([longitude, point.lat]), original);
+  };
+  try {
+    for (const element of elements) {
+      if (element.type === 'node') shift(element);
+      else if (element.type === 'way' && Array.isArray(element.geometry)) for (const point of element.geometry) shift(point);
+    }
+    const converted = osmtogeojson({elements}, {flatProperties: false});
+    for (const feature of converted.features) visitGeometryPoints(feature.geometry?.coordinates, (point) => {
+      const original = originalByContinuousPoint.get(JSON.stringify(point));
+      if (original !== undefined) point[0] = original;
+    });
+    return converted;
+  } finally {
+    for (const [point, original] of changed) point.lon = original;
+  }
+}
+
 function validateSector(sector) {
+  const projectionLatitude = sector?.projectionLatitude === undefined ? sector?.center?.[1] : sector.projectionLatitude;
   if (!sector || typeof sector.id !== 'string' || !sector.id.trim() ||
       typeof sector.title !== 'string' || !sector.title.trim() ||
       !finiteCoordinate(sector.center) || Math.abs(sector.center[1]) > 85 ||
+      !Number.isFinite(projectionLatitude) || Math.abs(projectionLatitude) > 85 ||
       (sector.arenaSize !== undefined && sector.arenaSize !== ARENA_SIZE)) {
-    fail('INVALID_SECTOR', 'Некорректный сектор: нужны id, название, центр [долгота, широта] и размер 10 000 м. Широта должна быть от −85° до 85°.');
+    fail('INVALID_SECTOR', 'Некорректный сектор: нужны id, название, центр [долгота, широта] и размер 10 000 м. Широта центра и проекции должна быть от −85° до 85°.');
   }
-  return {id: sector.id, title: sector.title, center: [...sector.center], arenaSize: ARENA_SIZE};
+  return {id: sector.id, title: sector.title, center: [...sector.center], projectionLatitude, arenaSize: ARENA_SIZE};
 }
 
 function parsePayload(payload) {
@@ -260,23 +304,24 @@ function allRelationRingsPreserved(feature, prepared) {
   if (!relation || !['multipolygon', 'boundary'].includes(relation.tags.type)) return true;
   const polygons = feature.geometry.type === 'Polygon' ? [feature.geometry.coordinates] : feature.geometry.coordinates;
   const vertices = {outer: new Set(), inner: new Set()};
+  const vertexKey = (point) => JSON.stringify([point[0] === 180 ? -180 : point[0], point[1]]);
   for (const polygon of polygons) for (let i = 0; i < polygon.length; i++) {
-    for (const point of polygon[i]) vertices[i === 0 ? 'outer' : 'inner'].add(JSON.stringify(point));
+    for (const point of polygon[i]) vertices[i === 0 ? 'outer' : 'inner'].add(vertexKey(point));
   }
   for (const member of relation.members) {
     if (member.type !== 'way' || !['outer', 'inner'].includes(member.role)) continue;
     const line = coordinatesOfWay(prepared.wayMap.get(String(member.ref)), prepared.nodeMap);
-    if (!line || line.some((point) => !vertices[member.role].has(JSON.stringify(point)))) return false;
+    if (!line || line.some((point) => !vertices[member.role].has(vertexKey(point)))) return false;
   }
   return true;
 }
 
-function canonicalRing(rawRing, center, outer) {
+function canonicalRing(rawRing, center, outer, projectionLatitude) {
   if (!Array.isArray(rawRing) || rawRing.length < 4 || !rawRing.every(finiteCoordinate) ||
       !pointEqual(rawRing[0], rawRing.at(-1))) return null;
   let coordinates = rawRing.slice(0, -1).filter((p, i, all) => !i || !pointEqual(p, all[i - 1])).map((p) => [p[0], p[1]]);
   if (coordinates.length < 3) return null;
-  const area = ringArea(coordinates.map((p) => lonLatToLocal(p, center)));
+  const area = ringArea(coordinates.map((p) => lonLatToLocal(p, center, projectionLatitude)));
   if (Math.abs(area) < 1e-8) return null;
   if ((area > 0) !== outer) coordinates.reverse();
   let start = 0;
@@ -289,14 +334,14 @@ function canonicalRing(rawRing, center, outer) {
   return coordinates;
 }
 
-function canonicalPolygons(geometry, center) {
+function canonicalPolygons(geometry, center, projectionLatitude) {
   if (!geometry || !['Polygon', 'MultiPolygon'].includes(geometry.type)) return null;
   const input = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates;
   if (!Array.isArray(input) || !input.length) return null;
   const polygons = [];
   for (const polygon of input) {
     if (!Array.isArray(polygon) || !polygon.length) return null;
-    const rings = polygon.map((ring, i) => canonicalRing(ring, center, i === 0));
+    const rings = polygon.map((ring, i) => canonicalRing(ring, center, i === 0, projectionLatitude));
     if (rings.some((ring) => !ring)) return null;
     rings.splice(1, rings.length - 1, ...rings.slice(1).sort((a, b) => compare(JSON.stringify(a), JSON.stringify(b))));
     polygons.push(rings);
@@ -305,18 +350,18 @@ function canonicalPolygons(geometry, center) {
 }
 
 /** Union real components, avoiding duplicate area in overlapping OSM outers. */
-function normalizeFootprint(coordinates, center) {
-  const local = toLocalPolygons(coordinates, center);
+function normalizeFootprint(coordinates, center, projectionLatitude) {
+  const local = toLocalPolygons(coordinates, center, projectionLatitude);
   // Do not turn an invalid, partly external courtyard into a filled footprint.
   if (local.some((polygon) => polygon.slice(1).some((ring) => ring.some((point) => !pointInRing(point, polygon[0]))))) return null;
   let union;
   try { union = polygonClipping.union(local); }
   catch { return null; }
   if (!union.length) return null;
-  const lonLat = union.map((polygon) => polygon.map((ring) => ring.map((point) => localToLonLat(point, center))));
-  const canonical = canonicalPolygons({type: 'MultiPolygon', coordinates: lonLat}, center);
+  const lonLat = union.map((polygon) => polygon.map((ring) => ring.map((point) => localToLonLat(point, center, projectionLatitude))));
+  const canonical = canonicalPolygons({type: 'MultiPolygon', coordinates: lonLat}, center, projectionLatitude);
   if (!canonical) return null;
-  return {geometry: {type: 'MultiPolygon', coordinates: canonical}, polygons: toLocalPolygons(canonical, center)};
+  return {geometry: {type: 'MultiPolygon', coordinates: canonical}, polygons: toLocalPolygons(canonical, center, projectionLatitude)};
 }
 
 function canonicalLine(line) {
@@ -326,9 +371,9 @@ function canonicalLine(line) {
   return JSON.stringify(points) < JSON.stringify(reverse) ? points : reverse;
 }
 
-function canonicalBackgroundGeometry(geometry, center) {
+function canonicalBackgroundGeometry(geometry, center, projectionLatitude) {
   if (['Polygon', 'MultiPolygon'].includes(geometry?.type)) {
-    const coordinates = canonicalPolygons(geometry, center);
+    const coordinates = canonicalPolygons(geometry, center, projectionLatitude);
     return coordinates && {type: 'MultiPolygon', coordinates};
   }
   if (geometry?.type === 'LineString') {
@@ -381,11 +426,14 @@ function buildChunks(buildings, version) {
 
 /**
  * @param {object|string} payload One bounded Overpass JSON response.
- * @param {{id:string,title:string,center:number[],arenaSize?:number}} sector
+ * @param {{id:string,title:string,center:number[],projectionLatitude?:number,arenaSize?:number}} sector
  * @param {{onProgress?:(progress:object)=>void, source?:object}} options
  */
 export function normalizeOSMSector(payload, sector, {onProgress = () => {}, source: sourceInfo = {}} = {}) {
   const level = validateSector(sector);
+  const southwest = localToLonLat([-5000, -5000], level.center, level.projectionLatitude),
+    northeast = localToLonLat([5000, 5000], level.center, level.projectionLatitude);
+  const crossesDateLine = southwest[0] > northeast[0];
   onProgress({stage: 'validate', progress: 0, message: 'Проверяем ответ OSM'});
   const {source, responseBytes} = parsePayload(payload);
   const stats = {invalidOrIncompleteBuilding: 0, boundaryExcluded: 0, subSquareMeterExcluded: 0,
@@ -393,7 +441,7 @@ export function normalizeOSMSector(payload, sector, {onProgress = () => {}, sour
   const prepared = prepareElements(source, stats);
   onProgress({stage: 'convert', progress: 0.15, message: 'Собираем контуры и внутренние дворы'});
   let converted;
-  try { converted = osmtogeojson({elements: prepared.elements}, {flatProperties: false}); }
+  try { converted = convertOSM(prepared.elements, level.center[0], crossesDateLine); }
   catch { fail('GEOMETRY_CONVERSION_FAILED', 'Не удалось собрать геометрию OSM. Попробуй загрузить сектор заново.'); }
   const features = converted.features.filter((f) => ['way', 'relation'].includes(f.properties?.type))
     .sort((a, b) => Number(isPart(a.properties.tags)) - Number(isPart(b.properties.tags)) ||
@@ -403,15 +451,15 @@ export function normalizeOSMSector(payload, sector, {onProgress = () => {}, sour
     if (i % 250 === 0) onProgress({stage: 'buildings', progress: 0.25 + 0.45 * i / Math.max(1, features.length), message: 'Измеряем здания'});
     const feature = features[i], properties = feature.properties, tags = properties.tags || {};
     if (!isBuilding(tags) && !isPart(tags)) continue;
-    const coordinates = canonicalPolygons(feature.geometry, level.center);
+    const coordinates = canonicalPolygons(feature.geometry, level.center, level.projectionLatitude);
     if (properties.tainted || !coordinates || !allRelationRingsPreserved(feature, prepared)) { stats.invalidOrIncompleteBuilding++; continue; }
     buildingGeometryKeys.add(geometryKey({coordinates}));
-    const normalized = normalizeFootprint(coordinates, level.center);
+    const normalized = normalizeFootprint(coordinates, level.center, level.projectionLatitude);
     if (normalized) buildingGeometryKeys.add(geometryKey(normalized.geometry));
     if (!isBuilding(tags)) continue;
     if (properties.type === 'way' && prepared.buildingMembers.has(String(properties.id))) { stats.relationMemberExcluded++; continue; }
     if (prepared.explicitParts.has(feature.id)) { stats.buildingPartExcluded++; continue; }
-    const originalPolygons = toLocalPolygons(coordinates, level.center);
+    const originalPolygons = toLocalPolygons(coordinates, level.center, level.projectionLatitude);
     // Holes are checked too, so malformed OSM cannot sneak outside via an inner ring.
     if (originalPolygons.some((polygon) => polygon.some((ring) => ring.some((p) => Math.abs(p[0]) > 5000 + BOUNDARY_EPSILON || Math.abs(p[1]) > 5000 + BOUNDARY_EPSILON)))) {
       stats.boundaryExcluded++; continue;
@@ -462,11 +510,11 @@ export function normalizeOSMSector(payload, sector, {onProgress = () => {}, sour
         (properties.type === 'way' && (prepared.buildingMembers.has(String(properties.id)) || prepared.backgroundMembers.has(String(properties.id))))) continue;
     const kind = backgroundKind(tags);
     if (!kind) continue;
-    let geometry = canonicalBackgroundGeometry(feature.geometry, level.center);
+    let geometry = canonicalBackgroundGeometry(feature.geometry, level.center, level.projectionLatitude);
     if (!geometry) continue;
     if (geometry.type === 'MultiPolygon' && buildingGeometryKeys.has(geometryKey(geometry))) continue;
     if (geometry.type === 'MultiPolygon') {
-      const normalized = normalizeFootprint(geometry.coordinates, level.center);
+      const normalized = normalizeFootprint(geometry.coordinates, level.center, level.projectionLatitude);
       if (!normalized) continue;
       geometry = normalized.geometry;
       if (buildingGeometryKeys.has(geometryKey(geometry))) continue;
@@ -482,12 +530,17 @@ export function normalizeOSMSector(payload, sector, {onProgress = () => {}, sour
       properties: {...kind, ...(tags.name ? {name: tags.name} : {})}, geometry});
   }
   backgroundFeatures.sort((a, b) => compare(a.id, b.id) || compare(a.properties.kindGroup, b.properties.kindGroup));
+  if (crossesDateLine) {
+    // Output arrays are newly normalized, never caller-owned source arrays.
+    const unwrap = (point) => { point[0] = longitudeAroundCenter(point[0], level.center[0]); };
+    for (const building of buildings) visitGeometryPoints(building.geometry.coordinates, unwrap);
+    for (const feature of backgroundFeatures) visitGeometryPoints(feature.geometry.coordinates, unwrap);
+  }
   const background = {type: 'geojson', data: {type: 'FeatureCollection', features: backgroundFeatures}};
-  const fingerprint = contentHash([PIPELINE_VERSION, {id: level.id, center: level.center, arenaSize: level.arenaSize},
+  const fingerprint = contentHash([PIPELINE_VERSION, {id: level.id, center: level.center, projectionLatitude: level.projectionLatitude, arenaSize: level.arenaSize},
     ...buildings.map((b) => [b.id, b.geometry, b.height ?? null]), ...backgroundFeatures]);
   const version = `osm-${PIPELINE_VERSION}-${fingerprint}`;
   const {chunks, index} = buildChunks(buildings, version);
-  const southwest = localToLonLat([-5000, -5000], level.center), northeast = localToLonLat([5000, 5000], level.center);
   const bounds = [...southwest, ...northeast];
   const warnings = [];
   const minRadius = buildings.length ? buildings.reduce((minimum, building) => Math.min(minimum, building.radius), Infinity) : null;
@@ -505,10 +558,10 @@ export function normalizeOSMSector(payload, sector, {onProgress = () => {}, sour
   }
   if (stats.invalidOrIncompleteBuilding) warnings.push(`Пропущено неполных или некорректных контуров зданий: ${stats.invalidOrIncompleteBuilding}.`);
   const sourceTimestamp = typeof source.osm3s?.timestamp_osm_base === 'string' ? source.osm3s.timestamp_osm_base : null;
-  const manifest = {...level, version, chunkSize: CHUNK_SIZE,
+  const manifest = {...level, version, geometryWrap: 'sector-center', chunkSize: CHUNK_SIZE,
     totalBuildingArea: roundArea(buildings.reduce((sum, b) => sum + b.area, 0)), buildingCount: buildings.length,
     spawn: [0, 0], initialRadius: 18, targetPercent: 80, chunks: index, bounds,
-    projection: {type: 'local-equirectangular', radius: 6378137, origin: [...level.center], units: 'meters', x: 'east', y: 'north'},
+    projection: {type: 'local-equirectangular', radius: 6378137, origin: [...level.center], projectionLatitude: level.projectionLatitude, units: 'meters', x: 'east', y: 'north'},
     attribution: COPYRIGHT, license: 'ODbL-1.0', licenseUrl: LICENSE_URL, sourceTimestamp,
     sourceUrl: typeof sourceInfo.endpoint === 'string' ? sourceInfo.endpoint : 'https://www.openstreetmap.org/',
     warnings, suitability};
@@ -519,7 +572,7 @@ export function normalizeOSMSector(payload, sector, {onProgress = () => {}, sour
     osmTimestamp: sourceTimestamp, datasetVersion: version, geometryHash: fingerprint,
     hashAlgorithm: 'deterministic-128-bit-content-fingerprint', responseBytes, sourceElements: source.elements.length,
     license: 'ODbL-1.0', copyright: COPYRIGHT, copyrightUrl: COPYRIGHT_URL, licenseUrl: LICENSE_URL,
-    pipeline: PIPELINE_VERSION, arenaBounds: bounds,
+    pipeline: PIPELINE_VERSION, arenaBounds: bounds, projectionLatitude: level.projectionLatitude,
     metrics: {buildingCount: buildings.length, totalArea: manifest.totalBuildingArea, chunks: index.length,
       minRadius, initialEdibleBuildingCount, suggestedInitialRadius,
       backgroundLayers: {roads: 0, water: 0, parks: 0}, excluded: stats},
@@ -527,7 +580,8 @@ export function normalizeOSMSector(payload, sector, {onProgress = () => {}, sour
       'Only complete real OSM building contours inside the 10 km metric arena are eligible; no synthetic objects are added.',
       'Multipolygon relations retain courtyard holes and supersede member ways; identical outlines and contained building parts are excluded.',
       'Overlapping real components are unioned before area calculation; invalid or missing courtyard rings are rejected.',
-      'Polygon coordinates use R=6378137 local equirectangular metres, x east and y north; areas subtract holes.',
+      'Polygon coordinates use R=6378137 local equirectangular metres, x east and y north; projectionLatitude fixes the shared city longitude scale and areas subtract holes.',
+      'GeoJSON crossing the date line is unwrapped around the sector centre for continuous rendering; local metric geometry is unchanged.',
       'Every footprint uses its minimum enclosing circle with an additional 5 mm conservative radius margin.',
       'Background contains only real OSM roads, water and green spaces; building footprints are never baked into it.',
       'OSM building:levels, when used, estimates height at 3 metres per level.',

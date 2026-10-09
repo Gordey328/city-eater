@@ -1,6 +1,7 @@
 import {normalizeOSMSector} from './osm-import.js';
 
 // The parent owns fetching, cancellation (worker.terminate), caching and retries.
+// Forward the entire sector, including its shared city projectionLatitude.
 // Importing the module in tests is safe; it has no main-thread side effects.
 if (typeof self !== 'undefined' && typeof self.postMessage === 'function' && typeof document === 'undefined') {
   self.addEventListener('message', (event) => {

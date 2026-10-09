@@ -1,11 +1,16 @@
-import {localToLonLat} from './geometry.js';
+import {localToLonLat,unwrapLongitude} from './geometry.js';
+/** Keep map coordinates in the same world copy across the antimeridian. */
+export function mapCoordinates(position,manifest,referenceLongitude=manifest.center[0]){
+  const point=localToLonLat(position,manifest.center,manifest.projectionLatitude);
+  point[0]=unwrapLongitude(point[0],referenceLongitude);return point;
+}
 const empty=()=>({type:'FeatureCollection',features:[]});
 
 /** Pure style construction, independently validated against the installed MapLibre spec. */
 export function createMapStyle(manifest,base){
     const sources=manifest.sourceLayers || {roads:'roads',water:'water',parks:'parks'};
     const pmUrl=new URL(manifest.pmtiles||'map.pmtiles',base).href;
-    const corners=[[-5000,-5000],[5000,-5000],[5000,5000],[-5000,5000],[-5000,-5000]].map(p=>localToLonLat(p,manifest.center));
+    const corners=[[-5000,-5000],[5000,-5000],[5000,5000],[-5000,5000],[-5000,-5000]].map(p=>mapCoordinates(p,manifest));
     const style={version:8,sources:{basemap:{type:'vector',url:`pmtiles://${pmUrl}`,attribution:'© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>'},buildings:{type:'geojson',data:empty()},bounds:{type:'geojson',data:{type:'Feature',geometry:{type:'Polygon',coordinates:[corners]}}}},layers:[
       {id:'ground',type:'background',paint:{'background-color':'#e7e9d9'}},
       {id:'parks',type:'fill',source:'basemap','source-layer':sources.parks,paint:{'fill-color':'#c4d3b3','fill-opacity':.7}},
