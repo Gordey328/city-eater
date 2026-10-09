@@ -1,6 +1,6 @@
 # Native-tile coverage prototype
 
-Status: native streaming and Canvas2D background support are implemented. Initial cloud source probes were blocked; subsequent permitted app navigation loaded real native tiles and produced coverage. End-to-end Canvas2D gameplay remains a separate release gate. Local fixture tests do not establish live network latency or mobile rendering performance. No alternate endpoints or access workarounds are used.
+Status: native streaming and Canvas2D background support are implemented. Initial cloud source probes were blocked; subsequent permitted app navigation loaded real native tiles and produced coverage. The b567714c candidate subsequently passed actual desktop Canvas2D entry, movement/absorption, save/reload and cancellation; see [runtime validation](CANVAS_RUNTIME_VALIDATION.md). Local fixture tests do not establish live network latency or mobile rendering performance. No alternate endpoints or access workarounds are used.
 
 ## Public API
 
