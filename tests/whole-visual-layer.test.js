@@ -15,3 +15,11 @@ test('thrown model preparation attempts obey the same four-attempt frame limit',
 test('complex visual-only fallback is rejected before a worker classification batch',async()=>{const b=building(),ring=Array.from({length:6001},(_,i)=>[i/100,0]);b.polygons=[[ring]];const f=fixture({items:[b]});f.layer.sync(f.game,f.renderer,0);await flush();assert.equal(f.calls.length,0);assert.equal(f.layer.stats.preparedModels,0);});
 
 test('soft preparation deadline defers work without discarding the cached footprint',async()=>{const f=fixture();f.layer.sync(f.game,f.renderer,0);await flush();let reads=0;f.layer.prepareClock=()=>reads++?3:0;assert.equal(f.layer.sync(f.game,f.renderer,1).length,0);assert.equal(f.layer.stats.preparedThisFrame,0);assert.equal(f.layer.cache.size,1);f.layer.prepareClock=()=>0;assert.equal(f.layer.sync(f.game,f.renderer,2).length,1);});
+
+
+test('resident tall buildings enter the candidate set when only their raised model is visible',async()=>{
+  const b=building('tall');b.bounds=[0,-450,10,-430];b.center=[5,-440];b.polygons=[[[[0,-450],[10,-450],[10,-430],[0,-430],[0,-450]]]];b.modelParts=[{polygons:b.polygons,heightMeters:900,minHeightMeters:0}];
+  const f=fixture({items:[b]});f.layer.sync(f.game,f.renderer,0);await flush();
+  assert.deepEqual(f.calls,[['tall']]);assert.equal(f.layer.sync(f.game,f.renderer,1).length,1);
+  assert.equal(f.whole.buildings.length,1,'only the existing resident catalog is used');
+});

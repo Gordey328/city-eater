@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {localToLonLat} from '../src/geometry.js';
 import {mercatorProject} from '../src/mercator-view.js';
-import {prepareBuildingModel, releaseBuildingModel, planBuildingModels, drawBuildingModels, buildingModelScreenBounds} from '../src/building-models.js';
+import {prepareBuildingModel, releaseBuildingModel, planBuildingModels, drawBuildingModels, buildingModelScreenBounds, buildingVisualQueryBounds} from '../src/building-models.js';
 
 const manifest = {center: [30.1075, 59.5633], projectionLatitude: 59.5633};
 const rectangle = (left, bottom, right, top) => [[left, bottom], [right, bottom], [right, top], [left, top], [left, bottom]];
@@ -183,10 +183,12 @@ test('culling includes a roof that enters the viewport and skips truly offscreen
   assert.deepEqual(drawBuildingModels(null, [model], roofOnlyFrame, {extrusion: 1, maxVertices: 8}).selectedIds, [], 'flat fallback outside viewport is not excluded from the mask');
 });
 
-test('visual height cap is reported without changing source heights, min heights or footprint', () => {
+test('valid tall source heights remain uncompressed with original min height and footprint', () => {
   const building = makeBuilding({modelParts: [{polygons, heightMeters: 900, minHeightMeters: 100}]}), model = prepare(building);
   const stats = drawBuildingModels(null, [model], frame(), {extrusion: 1, maxRoofLiftPixels: 40});
-  assert.equal(stats.visuallyCappedBuildings, 1); assert.equal(stats.plan.selections[0].lift, 40);
+  const lift=900*model.metersToWorld*frame().worldSize*frame().roofLiftFactor;
+  assert.ok(lift>96); approx(stats.plan.selections[0].lift,lift); approx(stats.maxRoofLiftPixels,lift);
+  assert.equal(stats.heightScale,'source-metres'); assert.equal(stats.plan.selections[0].liftScale,undefined);
   assert.equal(model.parts[0].heightMeters, 900); assert.equal(model.parts[0].minHeightMeters, 100);
   assert.equal(building.modelParts[0].heightMeters, 900);
 });
@@ -226,4 +228,53 @@ test('explicit release drops retained paths even while the original catalog buil
   assert.equal(releaseBuildingModel(building), true);
   assert.equal(releaseBuildingModel(building), false);
   assert.notEqual(prepare(building), first);
+});
+
+
+test('tall roof and wall intersections survive culling far beyond the old screen cap', () => {
+  const model=prepare(makeBuilding({modelParts:[{polygons,heightMeters:900,minHeightMeters:100}]})), f=frame();
+  const ground=buildingModelScreenBounds(model,f), below={...f,offsetY:f.offsetY+900-ground[1]};
+  const ctx=context(), stats=drawBuildingModels(ctx,[model],below,{extrusion:1});
+  assert.equal(stats.drawnBuildings,1); assert.ok(stats.maxRoofLiftPixels>600);
+  assert.ok(stats.plan.selections[0].bounds[1]<600);
+  assert.equal(drawBuildingModels(null,[model],below,{extrusion:0}).drawnBuildings,0);
+  assert.ok(ctx.transforms.flat().every(Number.isFinite));
+});
+
+test('height changes do not increase submitted geometry and preserve a single world scale', () => {
+  for(const latitude of [0,60,84.9])for(const height of [100,1000,3660])for(const zoom of [14,17,19])for(const dpr of [1,2]){
+    const m={center:[30,latitude],projectionLatitude:latitude},model=prepare(makeBuilding({modelParts:[{polygons,heightMeters:height,minHeightMeters:height/4}]}),m);
+    const size=512*2**zoom, center=mercatorProject(m.center),f=frame(m,{worldSize:size,offsetX:400-center[0]*size,offsetY:300-center[1]*size*.9,pixelRatio:dpr}),ctx=context();
+    const stats=drawBuildingModels(ctx,[model],f,{extrusion:1});
+    approx(stats.maxRoofLiftPixels,height*model.metersToWorld*size*.44);
+    assert.equal(stats.drawnVertices,model.emittedVertexCost);
+    assert.equal(stats.drawnVertices,ctx.submittedVertices);
+    assert.ok(ctx.transforms.flat().every(Number.isFinite));
+  }
+});
+
+test('front flat buildings draw after rear tall walls in stable ground-depth order', () => {
+  const rearShape=[[rectangle(-10,30,10,50)]],rear=prepare(makeBuilding({id:'rear',polygons:rearShape,modelParts:[{polygons:rearShape,heightMeters:900}]}));
+  const front=prepare(makeBuilding({id:'front',modelParts:[]})),ctx=context();
+  const stats=drawBuildingModels(ctx,[front,rear],frame(),{extrusion:1});
+  assert.deepEqual(stats.plan.selections.map(s=>s.model.id),['rear','front']);
+  const lastRear=ctx.calls.findLastIndex(c=>c.path===rear.wallPath||c.path===rear.parts[0].path);
+  const firstFront=ctx.calls.findIndex(c=>c.path===front.ground.path);
+  assert.ok(firstFront>lastRear);
+});
+
+test('visual query broad phase covers elevated roofs without changing the ground footprint', () => {
+  const shape=[[rectangle(-10,-450,10,-430)]],b=makeBuilding({polygons:shape,bounds:[-10,-450,10,-430],center:[0,-440],modelParts:[{polygons:shape,heightMeters:900}]}),before=JSON.stringify(b);
+  const result=buildingVisualQueryBounds(b,manifest);
+  assert.deepEqual(result.slice(0,3),b.bounds.slice(0,3));assert.ok(result[3]>0);
+  assert.equal(JSON.stringify(b),before);
+  assert.deepEqual(buildingVisualQueryBounds({...b,modelParts:[]},manifest),b.bounds);
+});
+
+test('overflowing frame arithmetic fails before any Canvas matrix is submitted', () => {
+  const model=prepare(makeBuilding({modelParts:[{polygons,heightMeters:3660}]}));
+  for(const extra of [{worldSize:Number.MAX_VALUE,pixelRatio:2},{offsetX:Number.MAX_VALUE,pixelRatio:2},{roofLiftFactor:Number.MAX_VALUE},{worldSize:5e307,pixelRatio:2,offsetX:8e307,offsetY:0,viewportWidth:Number.MAX_VALUE,viewportHeight:Number.MAX_VALUE}]){
+    const ctx=context(); assert.throws(()=>drawBuildingModels(ctx,[model],frame(manifest,extra),{extrusion:1}),/overflow/);
+    assert.equal(ctx.transforms.length,0);
+  }
 });

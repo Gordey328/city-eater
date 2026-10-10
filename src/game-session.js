@@ -10,7 +10,7 @@ export class GameSession {
       if(previous){try{await previous.persist();}catch(error){if(current()){this.game=previous;this.setState('paused');this.onError(error,'save');}else previous.dispose();return false;}previous.dispose();}if(!current())return false;this.renderer.dispose();
       const game=this.gameFactory({sector,mode,onStatus:(text,detail)=>{if(current())this.onStatus(text,detail);}});this.game=game;
       const run=await game.prepare(entryPoint,{restart});if(!current())return false;
-      const manifest={...sector,tileMetadata:game.stream.metadata};
+      const manifest={...(game.sector||sector),tileMetadata:game.stream.metadata};
       this.onStatus('Рисуем дороги, воду и парки…',{phase:'renderer'});
       const rendered=await this.renderer.load(manifest,run,game.stream.source);if(!current())return false;if(!rendered||!this.renderer.ready)throw new Error('Карта не готова. Повтори загрузку.');
       this.renderer.maskDisplay=game.display;await game.persist();if(!current())return false;

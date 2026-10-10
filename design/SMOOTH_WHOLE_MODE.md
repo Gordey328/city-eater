@@ -1,5 +1,8 @@
 # Smooth Whole models and 3 km districts · v0.10
 
+Historical v0.10 design. The later requested removal of the 96 CSS px display
+compression is documented in [UNCAPPED_HEIGHTS.md](UNCAPPED_HEIGHTS.md).
+
 ## Scope
 
 Districts are 3000×3000 local metres. The new v3 namespace starts fresh while

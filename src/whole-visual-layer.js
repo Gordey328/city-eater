@@ -1,5 +1,5 @@
 import {SpatialIndex} from './geometry.js';
-import {prepareBuildingModel,drawBuildingModels,releaseBuildingModel} from './building-models.js';
+import {prepareBuildingModel,drawBuildingModels,releaseBuildingModel,buildingVisualQueryBounds} from './building-models.js';
 export const WHOLE_VISUAL_LIMITS=Object.freeze({buildings:128,vertices:24000,footprintBytes:2*1024*1024,batch:8,preparedVertices:96000,preparePerFrame:4,prepareVerticesPerFrame:6000});
 export function visualSourceVertexCount(building){
   const geometries=[...new Set([building.polygons,...(building.modelParts||[]).map(p=>p.polygons)])];
@@ -10,7 +10,7 @@ export function visualSourceVertexCount(building){
 export function classifyFootprint(chunks,mask){
   let nonempty=false,eaten=false,remaining=false;
   if(!Array.isArray(chunks)||!chunks.length)return'unknown';
-  for(const [key,bits] of chunks){const coverage=mask.getCoverageChunk(key),consumed=mask.getConsumedChunk(key);if(!(bits instanceof Uint8Array)||bits.length!==8192||!coverage)return'unknown';
+  for(const [key,bits] of (mask.clipFootprintChunks?.(chunks)||chunks)){const coverage=mask.getCoverageChunk(key),consumed=mask.getConsumedChunk(key);if(!(bits instanceof Uint8Array)||bits.length!==8192||!coverage)return'unknown';
     for(let i=0;i<bits.length;i++){const value=bits[i];if(!value)continue;nonempty=true;if(value&~coverage[i])return'unknown';if(value&(consumed?.[i]||0))eaten=true;if(value&~(consumed?.[i]||0))remaining=true;}
   }
   return !nonempty?'unknown':!remaining?'gone':eaten?'partial':'untouched';
@@ -22,7 +22,7 @@ export class WholeVisualLayer{
   sync(game,renderer,now=performance.now()){
     const whole=game.whole;
     if(this.disposed||game.mode!=='whole'||!whole?.ready){if(this.catalog||this.cache.size)this.reset();return[];}
-    if(this.catalog!==whole.buildings){this.reset();this.whole=whole;this.catalog=whole.buildings;this.index=new SpatialIndex(128);for(const b of this.catalog)if(b.complete&&b.bounds)this.index.insert(b,b.bounds);}
+    if(this.catalog!==whole.buildings){this.reset();this.whole=whole;this.catalog=whole.buildings;this.index=new SpatialIndex(128);for(const b of this.catalog)if(b.complete&&b.bounds)this.index.insert(b,buildingVisualQueryBounds(b,this.manifest));}
     if(now-this.lastQuery>200){this.lastQuery=now;const bounds=renderer.localViewBounds(180),p=game.run.position;
       this.candidates=this.index.query(bounds).filter(b=>{if(this.gone.has(b.id)||this.failed.has(b.id))return false;if(visualSourceVertexCount(b)>WHOLE_VISUAL_LIMITS.prepareVerticesPerFrame){this.failed.add(b.id);return false;}return true;}).sort((a,b)=>(a.center[0]-p[0])**2+(a.center[1]-p[1])**2-((b.center[0]-p[0])**2+(b.center[1]-p[1])**2)).slice(0,WHOLE_VISUAL_LIMITS.buildings);
       const signature=this.candidates.map(b=>b.id).join('|');if(signature!==this.querySignature){this.budgetBlocked.clear();this.querySignature=signature;}const wanted=new Set(this.candidates.map(b=>b.id));for(const [id,entry] of this.cache)if(!wanted.has(id)){this.bytes-=entry.bytes;this.releaseEntry(entry);this.cache.delete(id);this.budgetBlocked.clear();}
@@ -47,7 +47,7 @@ export class WholeVisualLayer{
   schedule(){if(this.pending||!this.whole?.ready||this.disposed)return;const buildings=this.candidates.filter(b=>!this.cache.has(b.id)&&!this.failed.has(b.id)&&!this.gone.has(b.id)&&!this.budgetBlocked.has(b.id)).slice(0,WHOLE_VISUAL_LIMITS.batch);if(!buildings.length)return;
     const whole=this.whole,generation=this.generation,promise=whole.rasterizeSeparately(buildings);this.pending=promise;
     promise.then(results=>{if(this.disposed||generation!==this.generation||whole!==this.whole||!whole.ready)return;
-      const current=new Set(this.candidates.map(b=>b.id)),wanted=new Map(buildings.map(b=>[b.id,b]));for(const result of results){const building=wanted.get(result.id);if(!building||!current.has(result.id)||this.cache.has(result.id)||!whole.buildings.includes(building)||!Array.isArray(result.chunks))continue;const bytes=result.chunks.reduce((n,[,bits])=>n+bits.byteLength,0);if(bytes>WHOLE_VISUAL_LIMITS.footprintBytes||this.bytes+bytes>WHOLE_VISUAL_LIMITS.footprintBytes||this.cache.size>=WHOLE_VISUAL_LIMITS.buildings){this.budgetBlocked.add(building.id);continue;}this.cache.set(building.id,{building,chunks:result.chunks,bytes,state:'unknown',consumedRevision:-1,coverageRevision:-1,model:null});this.bytes+=bytes;}
+      const current=new Set(this.candidates.map(b=>b.id)),wanted=new Map(buildings.map(b=>[b.id,b]));for(const result of results){const building=wanted.get(result.id);if(!building||!current.has(result.id)||this.cache.has(result.id)||!whole.buildings.includes(building)||!Array.isArray(result.chunks))continue;const bytes=result.chunks.reduce((n,[,bits])=>n+bits.byteLength,0);if(bytes>WHOLE_VISUAL_LIMITS.footprintBytes||this.bytes+bytes>WHOLE_VISUAL_LIMITS.footprintBytes||this.cache.size>=WHOLE_VISUAL_LIMITS.buildings){this.budgetBlocked.add(building.id);continue;}this.cache.set(building.id,{building,chunks:this.mask.clipFootprintChunks?.(result.chunks)||result.chunks,bytes,state:'unknown',consumedRevision:-1,coverageRevision:-1,model:null});this.bytes+=bytes;}
     }).catch(error=>{if(generation===this.generation&&error.name!=='AbortError')for(const b of buildings)this.failed.add(b.id);}).finally(()=>{if(this.pending===promise)this.pending=null;});
   }
   plan(models,frame,options={}){
