@@ -139,7 +139,7 @@ function shapeInterval(shape,y,out) {
 
 export class ConsumptionMask {
   constructor(snapshot=null) {
-    this.coverage=new Map();this.consumed=new Map();
+    this.coverage=new Map();this.consumed=new Map();this.activeRegion=null;
     this.coverageSlots=new Array(MASK_CHUNK_COUNT);this.consumedSlots=new Array(MASK_CHUNK_COUNT);
     this.consumedCells=0;this.coverageRevision=0;this.consumedRevision=0;this.dirtyConsumed=new Set();
     if (snapshot) this.restore(snapshot);
@@ -147,9 +147,26 @@ export class ConsumptionMask {
   get consumedAreaM2() { return this.consumedCells*MASK_CELL_AREA_M2; }
   get coverageBytes() { return this.coverage.size*MASK_CHUNK_BYTES; }
   get consumedBytes() { return this.consumed.size*MASK_CHUNK_BYTES; }
+  /** Frozen score ownership. Absent chunks are outside the active land component.
+   * Set only before source coverage or consumed state is installed. */
+  setActiveRegion(records) {
+    if(this.coverage.size||this.consumedCells)throw new Error('Active region cannot change during a run');
+    const region=new Map();let count=0;
+    for(const [key,bits] of records){if(region.has(key)||++count>MASK_CHUNK_COUNT)throw new TypeError('Invalid active region');region.set(key,copyChunk(key,bits));}
+    this.activeRegion=region;return this;
+  }
+  getActiveRegionChunk(key){parseMaskChunkKey(key);return this.activeRegion?this.activeRegion.get(key)?.bits??new Uint8Array(MASK_CHUNK_BYTES):null;}
+  clipFootprintChunks(records){
+    const out=[];let count=0;const seen=new Set();
+    for(const [key,bits] of records){if(++count>MASK_CHUNK_COUNT||seen.has(key))throw new TypeError('Invalid footprint chunks');seen.add(key);const chunk=copyChunk(key,bits),active=this.activeRegion?.get(key);
+      if(this.activeRegion)for(let i=0;i<WORDS_PER_CHUNK;i++)chunk.words[i]&=active?.words[i]??0;
+      if(chunk.words.some(Boolean))out.push([key,chunk.bits]);
+    }return out;
+  }
   /** Copies input. Only call once all source tiles intersecting this chunk are known. */
   ingestCoverage(key,bits) {
     const chunk=copyChunk(key,bits);
+    if(this.activeRegion){const active=this.activeRegion.get(key);for(let i=0;i<WORDS_PER_CHUNK;i++)chunk.words[i]&=active?.words[i]??0;}
     this.coverage.set(key,chunk);this.coverageSlots[chunk.index]=chunk;this.coverageRevision++;
     return this;
   }
@@ -186,11 +203,11 @@ export class ConsumptionMask {
   consumeBuildingChunks(records) {
     if (!records || typeof records[Symbol.iterator]!=='function')
       throw new TypeError('Expected iterable [key, Uint8Array] building chunks');
-    const chunks=new Map();let entries=0;
+    const chunks=new Map(),seen=new Set();let entries=0;
     for (const entry of records) {
-      if (++entries>MASK_CHUNK_COUNT || !Array.isArray(entry) || entry.length!==2 || chunks.has(entry[0]))
+      if (++entries>MASK_CHUNK_COUNT || !Array.isArray(entry) || entry.length!==2 || seen.has(entry[0]))
         throw new TypeError('Invalid or duplicate building chunk');
-      const chunk=copyChunk(entry[0],entry[1]);chunks.set(chunk.key,chunk);
+      seen.add(entry[0]);const chunk=copyChunk(entry[0],entry[1]);if(this.activeRegion){const active=this.activeRegion.get(chunk.key);for(let i=0;i<WORDS_PER_CHUNK;i++)chunk.words[i]&=active?.words[i]??0;}if(chunk.words.some(Boolean))chunks.set(chunk.key,chunk);
     }
     const unknownChunks=[...chunks.keys()].filter(key=>!this.coverage.has(key));
     if (unknownChunks.length) return {newCells:0,areaM2:0,changedChunks:[],unknownChunks,dirtyBounds:null,
@@ -305,6 +322,7 @@ export class ConsumptionMask {
     for (const entry of records) {
       if (++entries>MASK_CHUNK_COUNT || !Array.isArray(entry) || entry.length!==2 || consumed.has(entry[0])) throw new TypeError('Invalid or duplicate consumed chunk');
       const chunk=copyChunk(entry[0],entry[1]);
+      if(this.activeRegion){const active=this.activeRegion.get(chunk.key);for(let i=0;i<WORDS_PER_CHUNK;i++)if(chunk.words[i]&~(active?.words[i]??0))throw new Error('Saved consumption leaves active land');}
       consumed.set(chunk.key,chunk);slots[chunk.index]=chunk;cells+=countMaskBits(chunk.bits);
     }
     for (const [key,chunk] of consumed) if (!chunk.words.some(Boolean)) {consumed.delete(key);slots[chunk.index]=undefined;}

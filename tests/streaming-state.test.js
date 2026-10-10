@@ -26,7 +26,7 @@ test('radius cap is explicit and never caps earned area or score',()=>{
 });
 test('new stream identity and 3km frame reject old geometry/schema without mutating save',()=>{
   const saved=createStreamRun(sector);assert.equal(saved.frame.arenaSize,ARENA_SIZE_METRES);assert.equal(ARENA_SIZE_METRES,3000);assert.equal(ARENA_HALF_METRES,1500);
-  assert.equal(STREAM_MODE,'tile-mask-3km-v3');assert.equal(STREAM_SCHEMA_VERSION,3);
+  assert.equal(STREAM_MODE,'tile-mask-land-3km-v4');assert.equal(STREAM_SCHEMA_VERSION,4);
   assert.throws(()=>createStreamRun({...sector,center:[31,60]},saved),/несовместимы/);assert.equal(saved.frame.center[0],30);
   assert.equal(createStreamRun(sector,saved).mode,STREAM_MODE);assert.equal(saved.schemaVersion,STREAM_SCHEMA_VERSION);
   for(const patch of [{mode:'tile-mask-v1'},{mode:'tile-mask-5km-v2'},{schemaVersion:1},{schemaVersion:2},{frame:{...saved.frame,arenaSize:10000}},{frame:{...saved.frame,arenaSize:5000}},{position:[2000.001,0]},{consumedArea:9000004}])
@@ -49,7 +49,7 @@ test('radius-sized boundary halo lets the hole reach edge/corner buildings',()=>
   const run=createStreamRun(sector);run.position=[9999,-9999];rewardStreamArea(run,5000000);assert.deepEqual(run.position,[2000,-2000]);
 });
 test('restored and serialized runs detach frame and position and recompute goal truth',()=>{
-  const saved=createStreamRun(sector);saved.consumedArea=100000;saved.completed=false;saved.progress=-10;saved.goalArea=1;
+  const saved=createStreamRun(sector);saved.consumedArea=100000;saved.completed=false;saved.progress=-10;saved.goalArea=100000;
   const run=createStreamRun(sector,saved);assert.equal(run.completed,true);assert.equal(run.progress,100);assert.equal(run.goalArea,100000);
   run.position[0]=20;run.frame.center[0]=31;assert.equal(saved.position[0],0);assert.equal(saved.frame.center[0],30);
   const snapshot=serializeStreamRun(run);snapshot.position[0]=99;snapshot.frame.center[0]=32;

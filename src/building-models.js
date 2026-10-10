@@ -1,5 +1,6 @@
-import {localToLonLat} from './geometry.js';
-import {mercatorProject} from './mercator-view.js';
+import {localToLonLat,lonLatToLocal} from './geometry.js';
+import {mercatorProject,mercatorUnproject} from './mercator-view.js';
+import {MAX_BUILDING_TILT} from './building-lod.js';
 
 const EARTH_CIRCUMFERENCE = 2 * Math.PI * 6378137;
 const MAX_SOURCE_VERTICES = 300000;
@@ -112,6 +113,24 @@ function renderHeight(part) {
     !['missing', 'invalid'].includes(part.heightProvenance) ? {height, minimum} : null;
 }
 
+/** Visual-only broad phase, computed once for each resident catalog object.
+ * A roof can enter the screen while its ground lies far south of the viewport.
+ * Index that full possible projection at the maximum supported tilt, rather
+ * than fetching more geometry or changing the authoritative ground footprint. */
+export function buildingVisualQueryBounds(building, manifest) {
+  const bounds = [...building.bounds];
+  const inputs = Array.isArray(building.modelParts) ? building.modelParts : [building];
+  const height = inputs.reduce((maximum, part) => Math.max(maximum, renderHeight(part)?.height || 0), 0);
+  if (!height) return bounds;
+  const center = Array.isArray(building.center) ? building.center : [bounds[0], bounds[1]];
+  const latitude = localToLonLat(center, manifest.center, manifest.projectionLatitude)[1];
+  const metersToWorld = 1 / (EARTH_CIRCUMFERENCE * Math.cos(clamp(latitude, -85.0511287798066, 85.0511287798066) * Math.PI / 180));
+  const north = mercatorProject(localToLonLat([bounds[0], bounds[3]], manifest.center, manifest.projectionLatitude));
+  north[1] -= height * metersToWorld * Math.tan(MAX_BUILDING_TILT);
+  bounds[3] = Math.max(bounds[3], lonLatToLocal(mercatorUnproject(north), manifest.center, manifest.projectionLatitude)[1]);
+  return bounds;
+}
+
 /** Prepare once per immutable catalog building. All input coordinates are local
  * metres. The authoritative original footprint is retained, without simplifying,
  * joining houses, or changing fit/reward geometry. Path coordinates are world
@@ -189,6 +208,8 @@ function normalizeFrame(frame) {
   if (!finite(frame?.worldSize) || frame.worldSize <= 0 || !finite(frame.offsetX) || !finite(frame.offsetY)) throw new TypeError('Invalid building model frame.');
   const groundScaleY = frame.groundScaleY ?? 1, roofLiftFactor = frame.roofLiftFactor ?? 0, pixelRatio = frame.pixelRatio ?? 1;
   if (!finite(groundScaleY) || groundScaleY <= 0 || !finite(roofLiftFactor) || roofLiftFactor < 0 || !finite(pixelRatio) || pixelRatio <= 0) throw new TypeError('Invalid building model projection factors.');
+  if (![frame.worldSize * pixelRatio, frame.worldSize * groundScaleY * pixelRatio,
+    frame.offsetX * pixelRatio, frame.offsetY * pixelRatio].every(finite)) throw new RangeError('Building projection overflow.');
   return {...frame, groundScaleY, roofLiftFactor, pixelRatio,
     viewportWidth: finite(frame.viewportWidth ?? frame.width) ? Math.max(0, frame.viewportWidth ?? frame.width) : Infinity,
     viewportHeight: finite(frame.viewportHeight ?? frame.height) ? Math.max(0, frame.viewportHeight ?? frame.height) : Infinity};
@@ -213,18 +234,18 @@ export function buildingModelScreenBounds(model, frame, lift = 0, shadow = false
 export function planBuildingModels(entries, frame, options = {}) {
   const f = normalizeFrame(frame), extrusion = finite(options.extrusion) ? clamp(options.extrusion, 0, 1) : 0;
   const maxBuildings = budget(options.maxBuildings, 128), maxVertices = budget(options.maxVertices, 24000);
-  const cap = finite(options.maxRoofLiftPixels) ? Math.max(0, options.maxRoofLiftPixels) : 96;
   const selections = [], seen = new Set();
   const stats = {selectedIds: [], drawnBuildings: 0, drawnVertices: 0, sourceVertices: 0,
-    extrudedBuildings: 0, flatBuildings: 0, flatFallbacks: 0, visuallyCappedBuildings: 0,
-    culledBuildings: 0, skippedBuildings: 0, maxRoofLiftPixels: cap, maxVertices, maxBuildings};
+    extrudedBuildings: 0, flatBuildings: 0, flatFallbacks: 0,
+    culledBuildings: 0, skippedBuildings: 0, maxRoofLiftPixels: 0, heightScale: 'source-metres', maxVertices, maxBuildings};
   for (const model of entries || []) {
     if (!model?.ground || seen.has(model.id)) continue;
     seen.add(model.id);
-    const rawLift = model.maxHeightMeters * model.metersToWorld * f.worldSize * f.roofLiftFactor * extrusion;
-    const lift = Math.min(cap, rawLift), liftScale = rawLift > 0 ? lift / rawLift : 1;
+    const lift = model.maxHeightMeters * model.metersToWorld * f.worldSize * f.roofLiftFactor * extrusion;
+    if (!finite(lift * f.pixelRatio)) throw new RangeError('Building height projection overflow.');
     let isExtruded = lift > 1e-6;
     let bounds = buildingModelScreenBounds(model, f, isExtruded ? lift : 0, isExtruded);
+    if (!bounds.every(value => finite(value * f.pixelRatio))) throw new RangeError('Building screen bounds overflow.');
     if (bounds[2] < 0 || bounds[0] > f.viewportWidth || bounds[3] < 0 || bounds[1] > f.viewportHeight) { stats.culledBuildings++; continue; }
     if (selections.length >= maxBuildings) { stats.skippedBuildings++; continue; }
     let cost = isExtruded ? model.emittedVertexCost : model.flatVertexCost;
@@ -233,9 +254,9 @@ export function planBuildingModels(entries, frame, options = {}) {
     if (stats.drawnVertices + cost > maxVertices) { stats.skippedBuildings++; continue; }
     // A roof-only candidate may become offscreen when reduced to a flat path.
     if (!isExtruded && (bounds[2] < 0 || bounds[0] > f.viewportWidth || bounds[3] < 0 || bounds[1] > f.viewportHeight)) { stats.culledBuildings++; continue; }
-    selections.push({model, isExtruded, lift: isExtruded ? lift : 0, liftScale, extrusion, bounds, cost});
+    selections.push({model, isExtruded, lift: isExtruded ? lift : 0, extrusion, bounds, cost});
     stats.selectedIds.push(model.id); stats.drawnBuildings++; stats.drawnVertices += cost; stats.sourceVertices += model.sourceVertices;
-    if (isExtruded) { stats.extrudedBuildings++; if (rawLift > cap) stats.visuallyCappedBuildings++; }
+    if (isExtruded) { stats.extrudedBuildings++; stats.maxRoofLiftPixels = Math.max(stats.maxRoofLiftPixels, lift); }
     else stats.flatBuildings++;
     if (fellBack) stats.flatFallbacks++;
   }
@@ -262,7 +283,7 @@ function pathTransform(context, model, frame, lift = 0, xShift = 0, yShift = 0) 
 
 /** Pure dry-run when context is null. Reuse the returned plan after drawing the
  * fallback mask: drawBuildingModels(ctx, entries, frame, {...opts, plan}). All
- * frame positions and cap distances are CSS pixels; pixelRatio is applied here.
+ * Frame positions and roof lifts are CSS pixels; pixelRatio is applied here.
  * The caller owns certification, consumed/partial filtering and mask exclusion.
  */
 export function drawBuildingModels(context, entries, frame, options = {}) {
@@ -288,10 +309,9 @@ export function drawBuildingModels(context, entries, frame, options = {}) {
       if (!item.isExtruded) {
         context.lineWidth = .65 / f.worldSize; context.strokeStyle = DEFAULT_EDGE;
         usePath(context, item.model.ground.path, 'stroke');
+        continue;
       }
-    }
-    for (const item of plan.selections) if (item.isExtruded) {
-      const model = item.model, liftPerMeter = model.metersToWorld * f.worldSize * f.roofLiftFactor * item.extrusion * item.liftScale;
+      const model = item.model, liftPerMeter = model.metersToWorld * f.worldSize * f.roofLiftFactor * item.extrusion;
       for (const part of model.renderParts) {
         const roofLift = part.heightMeters * liftPerMeter, baseLift = part.minHeightMeters * liftPerMeter;
         for (const wall of part.walls) {

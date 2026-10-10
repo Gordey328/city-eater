@@ -18,7 +18,7 @@ test('3km store leaves 5km and 10km saves intact and starts progress in a separa
   const oldSave={mode:'tile-mask-5km-v2',schemaVersion:2,area:400,position:[2500,-2500],bits:oldBytes};
   await write(oldStream,'square',{area:42,version:'10km'});await write(oldGame,'square',{buildingIds:['w1']});
   await write(oldFiveKm,'square',oldSave);
-  assert.equal(STREAM_DB_NAME,'city-eater-stream-3km-v3');
+  assert.equal(STREAM_DB_NAME,'city-eater-land-3km-v4');
   assert.deepEqual(await store.progress(),[]);assert.deepEqual(await store.load(sector.id),{run:null,masks:[]});
   const run=createStreamRun(sector);rewardStreamArea(run,4);await store.save(run,[['0,0',cell()]]);await store.reset(sector.id);
   assert.deepEqual(await read(oldStream,'square'),{area:42,version:'10km'});assert.deepEqual(await read(oldGame,'square'),{buildingIds:['w1']});
