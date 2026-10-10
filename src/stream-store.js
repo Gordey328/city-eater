@@ -1,7 +1,7 @@
 import {STREAM_MODE,STREAM_SCHEMA_VERSION,createStreamRun,serializeStreamRun} from './streaming-state.js';
 import {ConsumptionMask,MASK_CHUNK_COUNT} from './consumption-mask.js';
 
-export const STREAM_DB_NAME = 'city-eater-stream-5km-v2';
+export const STREAM_DB_NAME = 'city-eater-stream-3km-v3';
 /** Separate DB: opening this mode never migrates or deletes old game saves. */
 export class StreamStore {
   constructor(){this.db=null;this.opening=null;}

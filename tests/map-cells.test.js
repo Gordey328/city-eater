@@ -8,7 +8,7 @@ import {
 } from '../src/map-cells.js';
 
 const R = 6378137, DEG = Math.PI / 180;
-const step = 5000 / (R * DEG);
+const step = 3000 / (R * DEG);
 const wrapped = longitude => ((longitude + 180) % 360 + 360) % 360 - 180;
 const metricPoint = (point, cell) => [
   wrapped(point[0] - cell.center[0]) * R * DEG * Math.cos(cell.projectionLatitude * DEG),
@@ -17,6 +17,9 @@ const metricPoint = (point, cell) => [
 
 test('global cell identities and geometry do not depend on pan, zoom, title, or longitude world copy', () => {
   const point = [30.4158, 59.7229], cell = getMapCellAt(point);
+  assert.equal(MAP_GRID_VERSION,'world-row-equirectangular-3km-v3');
+  assert.match(cell.id,/^map-3km-v3-r-?\d+-c\d+\/s0-0$/);
+  assert.equal(cell.title,'Район 3 × 3 км');
   for (const delta of [-720, -360, 0, 360, 720]) assert.deepEqual(getMapCellAt([point[0] + delta, point[1]]), cell);
   const a = getVisibleMapCells([30.3, 59.6, 30.6, 59.9]);
   const b = getVisibleMapCells([30.4, 59.7, 30.5, 59.8]);
@@ -30,15 +33,15 @@ test('global cell identities and geometry do not depend on pan, zoom, title, or 
   assert.equal(one.projectionLatitude, two.projectionLatitude);
 });
 
-test('every latitude row has exact 5000-metre arena bounds and a finite local basis', () => {
+test('every latitude row has exact 3000-metre arena bounds and a finite local basis', () => {
   for (let latitude = -MAP_MAX_LATITUDE + step / 2; latitude < MAP_MAX_LATITUDE; latitude += step) {
     const cell = getMapCellAt([73.12456, latitude]);
     assert.ok(cell);
     assert.ok(Number.isFinite(cell.projectionLatitude));
     const sw = metricPoint(cell.bounds.slice(0, 2), cell), ne = metricPoint(cell.bounds.slice(2), cell);
-    for (const [actual, expected] of [[sw[0], -2500], [sw[1], -2500], [ne[0], 2500], [ne[1], 2500]]) assert.ok(Math.abs(actual - expected) < 1e-6, `${latitude}: ${actual}`);
+    for (const [actual, expected] of [[sw[0], -1500], [sw[1], -1500], [ne[0], 1500], [ne[1], 1500]]) assert.ok(Math.abs(actual - expected) < 1e-6, `${latitude}: ${actual}`);
     const actualLocalWidth = (cell.bounds[2] - cell.bounds[0]) * R * DEG * Math.cos(cell.center[1] * DEG);
-    assert.ok(Math.abs(actualLocalWidth / 5000 - 1) < 0.0015, `${latitude}: local distortion too high`);
+    assert.ok(Math.abs(actualLocalWidth / 3000 - 1) < 0.0015, `${latitude}: local distortion too high`);
   }
   assert.notEqual(getMapCellAt([0, 0]).projectionLatitude, getMapCellAt([0, 59]).projectionLatitude);
 });
@@ -48,7 +51,7 @@ test('equatorial integer column basis never feeds acos a value above one', () =>
     const cell = getMapCellAt([0, latitude]);
     assert.ok(Number.isFinite(cell.projectionLatitude));
     assert.ok(Math.abs(cell.projectionLatitude) < 2);
-    assert.equal(cell.arenaSize,5000);
+    assert.equal(cell.arenaSize,3000);
   }
 });
 
@@ -96,7 +99,7 @@ test('viewport selection is finite and all-or-none, with no arbitrary coarse sam
   const world = getVisibleMapCells([-180, -90, 180, 90]);
   assert.equal(world.tooDense, true);
   assert.equal(world.cells.length, 0);
-  assert.ok(world.totalCount > 1000000 && world.totalCount < 30000000);
+  assert.ok(world.totalCount > 1000000 && world.totalCount < 70000000);
   const city = getVisibleMapCells([30.1, 59.5, 30.9, 60]);
   assert.equal(city.tooDense, false);
   assert.equal(city.totalCount, city.cells.length);
@@ -137,7 +140,7 @@ test('polar caps are explicitly unselectable, while nearest and viewport behavio
     assert.equal(getMapCellAt([0, latitude]), null);
     const nearest = nearestMapCell([0, latitude]);
     assert.ok(nearest);
-    assert.equal(nearest.arenaSize,5000);
+    assert.equal(nearest.arenaSize,3000);
   }
   assert.deepEqual(getVisibleMapCells([-10, 85, 10, 90]), { cells: [], tooDense: false, totalCount: 0 });
 });
@@ -185,11 +188,12 @@ test('empty campaign stays empty and nearest does not silently fall back to glob
   assert.deepEqual(getVisibleMapCells([-180, -90, 180, 90], { campaign }), { cells: [], tooDense: false, totalCount: 0 });
 });
 
-test('new map campaigns are complete single arenas with exact5km dimensions and new identities', () => {
+test('new map campaigns are complete single arenas with exact 3km dimensions and new identities', () => {
   for (const point of [[0, 0], [30.4, 59.7], [179.999, 60], [-179.999, -16], [10, 84.8]]) {
     const cell = getMapCellAt(point), campaign = makeMapCellCampaign(cell, { title: '  Selected square  ' });
     assert.equal(campaign.id, cell.campaignId);
     assert.equal(campaign.gridVersion, MAP_GRID_VERSION);
+    assert.equal(campaign.schemaVersion,3);assert.equal(campaign.sectorSize,3000);
     assert.equal(campaign.title, 'Selected square');
     assert.equal(campaign.sectorCount, 1);
     assert.equal(campaign.rows, 1);
@@ -198,9 +202,9 @@ test('new map campaigns are complete single arenas with exact5km dimensions and 
     assert.equal(campaign.extentLabel, 'Район, выбранный на карте');
     assert.equal(campaign.boundaryIsPolygon, false);
     const size = coverageDimensions(campaign.bounds, campaign.center, campaign.projectionLatitude);
-    assert.ok(Math.abs(size.widthKm - 5) < 1e-8);
-    assert.ok(Math.abs(size.heightKm - 5) < 1e-8);
-    assert.equal(campaign.sectors[0].arenaSize,5000);
+    assert.ok(Math.abs(size.widthKm - 3) < 1e-8);
+    assert.ok(Math.abs(size.heightKm - 3) < 1e-8);
+    assert.equal(campaign.sectors[0].arenaSize,3000);
     assert.equal(getMapCellAt(cell.center, { campaign }).id, cell.id);
     assert.equal(mapCellFeature(cell).id, cell.id);
   }
@@ -225,7 +229,7 @@ test('features use canonical IDs, permit display properties, and have closed fin
 test('nearest global cell is the nearest centre among an independently enumerated local viewport', () => {
   for (const point of [[30.42, 59.72], [0.03, -0.03], [-179.99, -16.2], [179.99, 80.1]]) {
     const nearest = nearestMapCell(point);
-    const candidates = getVisibleMapCells([point[0] - 0.6, point[1] - 0.2, point[0] + 0.6, point[1] + 0.2]);
+    const candidates = getVisibleMapCells([point[0] - 0.3, point[1] - 0.1, point[0] + 0.3, point[1] + 0.1]);
     const distance = cell => {
       const dLat = (point[1] - cell.center[1]) * DEG, dLon = wrapped(point[0] - cell.center[0]) * DEG;
       return Math.sin(dLat / 2) ** 2 + Math.cos(point[1] * DEG) * Math.cos(cell.center[1] * DEG) * Math.sin(dLon / 2) ** 2;

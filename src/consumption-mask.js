@@ -5,13 +5,13 @@ import {ARENA_HALF_METRES, ARENA_SIZE_METRES} from './game-config.js';
  *
  * Game resolution is 2 m: a cell contributes 4 m² iff its centre lies in a real
  * building footprint. This is a raster approximation, not survey-grade area.
- * Grid origin is (-2500,-2500); y grows north. Byte bits are low-bit-first and
+ * Grid origin is (-1500,-1500); y grows north. Byte bits are low-bit-first and
  * each chunk is 256×256 cells. Cells outside the fixed arena are always zero.
  * Coverage MUST describe a complete chunk after ALL intersecting source tiles
  * are available. Missing chunks are unknown, never assumed to contain buildings.
  * Consumed bits survive coverage eviction, source revisions and feature-ID changes.
  */
-export const MASK_VERSION = 2;
+export const MASK_VERSION = 3;
 export const MASK_CELL_METRES = 2;
 export const MASK_CELL_AREA_M2 = 4;
 export const MASK_ARENA_HALF = ARENA_HALF_METRES;
@@ -44,6 +44,7 @@ export function parseMaskChunkKey(key) {
   if (typeof key !== 'string' || key.length!==3 || !/^[0-9],[0-9]$/.test(key))
     throw new RangeError('Expected canonical arena chunk key "cx,cy"');
   const [cx, cy] = key.split(',').map(Number);
+  maskChunkKey(cx, cy); // Reject padding-only or old-grid chunk coordinates.
   return {cx, cy, index: cy * MASK_CHUNKS_PER_AXIS + cx};
 }
 export function maskCellAt(position) {

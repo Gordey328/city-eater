@@ -40,7 +40,7 @@ native source is also quantized; the test does not recover survey precision.
 
 ## Fit, border access, and rewards
 
-The active arena is 5,000 × 5,000 m. The hole center may move beyond an arena edge
+The active arena is 3,000 × 3,000 m. The hole center may move beyond an arena edge
 by its current radius, capped at 500 m. Native catalog queries cover the entire
 hole circle's bounding box plus 150 m, including the region outside the arena.
 The catalog never clips a building to the active arena for eligibility.
@@ -63,6 +63,41 @@ invalidate pending results. `consumeBuildingChunks` validates every required
 coverage chunk before any mutation; unknown coverage makes the whole operation
 incomplete. Commit and reward run together without an intervening await.
 
+## Render heights and smooth footprint models
+
+The game receives rendering heights, not height provenance or survey data. The
+[OpenMapTiles schema](https://openmaptiles.org/docs/schema/#building) calls these
+values approximate. The current [Planetiler implementation](https://github.com/openmaptiles/planetiler-openmaptiles/blob/main/src/main/java/org/openmaptiles/layers/Building.java)
+uses explicit height when available, otherwise levels times 3.66, otherwise a
+5 m default, then rounds upward. Minimum height similarly uses a tag, minimum
+levels, or zero and rounds downward. The resulting tile does not say which path
+was used. A supplied value of 5 m is therefore not proof of a measured height.
+Colour can also be material-derived. `hide_3d` marks outlines to keep flat.
+
+`building.modelParts` preserves attribute-specific polygons, including courtyard
+holes, with `heightMeters`, `minHeightMeters`, sanitized `colour`, `hide3d`,
+`heightProvenance`, and `minHeightProvenance`. Every valid supplied height is
+`source-approximation`. Missing/invalid heights become null and stay flat;
+missing minimum height uses zero with `ground-fallback` provenance. A negative,
+non-numeric, non-finite, or inverted minimum height invalidates extrusion rather
+than inventing a clamp. Heights above the defensive 3,660 m bound also stay flat.
+The renderer must honor `hide3d` even when a height value is present.
+
+Uniform attributes reuse the exact authoritative polygons reference. Mixed
+complexes retain separate attribute-group unions; a tall inner part does not
+raise the whole footprint to that height. Top-level height fields are null with
+`mixed` provenance for such complexes. None of these model attributes changes
+seam signatures, ground fit, complete-footprint certification, or reward geometry.
+A model complexity fallback empties `modelParts` and records `modelFallback`;
+the original certified gameplay footprint remains available for flat drawing.
+
+`rasterizeSeparately(currentCatalogObjects)` returns individual `{id,chunks}`
+footprint masks for classification against the persistent consumed mask. It
+accepts at most 16 current objects and preflights at most 1 MiB of combined mask
+output before any raster work. The worker and stream check generations; stale
+results reject as AbortError. The existing union-raster consumption API is
+unchanged. Visible renderer/cache limits are additional to these worker limits.
+
 ## Bounded loading and memory
 
 `WholeBuildingStream` borrows the existing `TileSource`. It does not dispose the
@@ -80,6 +115,8 @@ Limits in the implementation:
 - At most 300,000 decoded/output vertices and 30,000 input fragments.
 - At most 500,000 spatial-grid references and 250,000 pair comparisons.
 - At most 12,000 certified output components.
+- At most 64 render attribute groups per component and 300,000 additional model
+  vertices per catalog; excess rendering complexity falls back flat.
 - Components wider or taller than the 1,000 m maximum hole diameter are omitted
   from the consumable catalog; the regular map/coverage still contains them.
 - Raster batches accept at most 256 components and 36 mask chunks. The current
@@ -102,7 +139,9 @@ certainty. Persistent consumed cells remain source-independent either way.
 `tests/whole-building.test.js` covers touching versus overlapping components,
 reused IDs, buffered seams and courtyards, missing contributors, the outside
 900 m border case, stale worker results, cancellation, update starvation, and
-same-window reuse. A genuine saved Gatchina OSM relation (`r1659230`) is locally
+same-window reuse. Height tests cover approximate/default uncertainty, hidden
+outlines, mixed-height wings, separate-raster caps, and render-only complexity
+fallbacks without changed gameplay. A genuine saved Gatchina OSM relation (`r1659230`) is locally
 encoded into native PBF tiles and reconstructed with both courtyards intact and
 less than 0.5% area difference. This is a real-geometry adapter fixture, not a
 claim that it is a captured live OpenFreeMap payload.

@@ -1,5 +1,5 @@
 /** Shared, versioned arena rules. District coordinates are metres from centre. */
-export const ARENA_SIZE_METRES = 5000;
+export const ARENA_SIZE_METRES = 3000;
 export const ARENA_HALF_METRES = ARENA_SIZE_METRES / 2;
 export const ARENA_SIZE = ARENA_SIZE_METRES;
 export const ARENA_HALF = ARENA_HALF_METRES;

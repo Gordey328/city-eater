@@ -6,7 +6,7 @@ import {createStreamRun,rewardStreamArea} from '../src/streaming-state.js';
 import {rasterizeCoverageChunk,maskChunksForBounds} from '../src/consumption-mask.js';
 import {TileStream} from '../src/tile-stream.js';
 globalThis.indexedDB=indexedDB;
-const sector={id:'stream-test',center:[30,60],arenaSize:5000};
+const sector={id:'stream-test',center:[30,60],arenaSize:3000};
 const rect=[[[-5000,-5000],[5000,-5000],[5000,5000],[-5000,5000],[-5000,-5000]]];
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return{resolve,promise};};
 function fixture({store=new StreamStore(),id=sector.id}={}){
@@ -35,8 +35,8 @@ test('save snapshots are detached before asynchronous database initialization',a
  const store=new StreamStore(),wait=deferred(),init=store.init.bind(store);store.init=async()=>{await wait.promise;return init();};const run=createStreamRun({...sector,id:'snapshot'}),bits=new Uint8Array(8192);bits[0]=1;run.consumedArea=4;const pending=store.save(run,new Map([['0,0',bits]]));run.consumedArea=8;bits[0]=3;wait.resolve();await pending;const saved=await store.load('snapshot');assert.equal(saved.run.consumedArea,4);assert.equal(saved.masks[0].bits[0],1);
 });
 test('new-mode DB does not create or modify legacy game stores',async()=>{
- const databases=await indexedDB.databases();assert.ok(databases.some(db=>db.name==='city-eater-stream-5km-v2'));assert.ok(!databases.some(db=>db.name==='city-eater-v1'));
+ const databases=await indexedDB.databases();assert.ok(databases.some(db=>db.name==='city-eater-stream-3km-v3'));assert.ok(!databases.some(db=>db.name==='city-eater-v1'));
 });
 test('restore rejects future schemas, malformed coordinates and corrupt area',()=>{
- const saved=createStreamRun(sector);for(const patch of [{schemaVersion:3},{position:[0]},{position:[NaN,0]},{consumedArea:-4},{consumedArea:1},{consumedArea:Infinity},{elapsed:-1},{frame:{...saved.frame,center:[]}}])assert.throws(()=>createStreamRun(sector,{...saved,...patch}),/несовместимы/);
+ const saved=createStreamRun(sector);for(const patch of [{schemaVersion:4},{position:[0]},{position:[NaN,0]},{consumedArea:-4},{consumedArea:1},{consumedArea:Infinity},{elapsed:-1},{frame:{...saved.frame,center:[]}}])assert.throws(()=>createStreamRun(sector,{...saved,...patch}),/несовместимы/);
 });
