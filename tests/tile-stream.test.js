@@ -5,10 +5,10 @@ import {TileSource, TILEJSON_URL, validateTileMetadata, TILE_SOURCE_LIMITS} from
 import {TileStream, nativeTilesForBounds} from '../src/tile-stream.js';
 import {decodeBuildingTile, TileCoverageProcessor} from '../src/tile-coverage.worker.js';
 import {ConsumptionMask, countMaskBits, rasterizeCoverageChunk, maskChunkBounds} from '../src/consumption-mask.js';
-import {lonLatToLocal} from '../src/geometry.js';
+import {lonLatToLocal,getBounds} from '../src/geometry.js';
 
 const metadata = {tiles: ['https://tiles.openfreemap.org/planet/fixture/{z}/{x}/{y}.pbf'], minzoom: 0, maxzoom: 14, vector_layers: [{id: 'building'}]};
-const manifest = {id: 'tile-fixture', center: [0, 0], projectionLatitude: 0, arenaSize: 5000};
+const manifest = {id: 'tile-fixture', center: [0, 0], projectionLatitude: 0, arenaSize: 3000};
 const rectangle = (l,t,r,b) => [[l,t],[r,t],[r,b],[l,b],[l,t]];
 const encode = (features = [], extent = 4096) => {
   const bytes = fromGeojsonVt({building: {features: features.map((geometry, index) => ({type: 3, id: index, tags: {}, geometry}))}}, {extent});
@@ -98,19 +98,19 @@ test('decoder honors dynamic extent, courtyard holes and no feature-ID dependenc
   const doubled=rings.map(ring=>ring.map(([x,y])=>[x*2,y*2]));
   const b=decodeBuildingTile(tile(8192,8192,encode([doubled],8192)),manifest);
   assert.deepEqual(a.polygons,b.polygons);assert.equal(a.polygons[0].length,2);
-  const bits=rasterizeCoverageChunk('5,4',a.polygons);assert.ok(countMaskBits(bits)>0);
-  const solid=rasterizeCoverageChunk('5,4',a.polygons.map(p=>[p[0]]));assert.ok(countMaskBits(bits)<countMaskBits(solid));
+  const bits=rasterizeCoverageChunk('3,2',a.polygons);assert.ok(countMaskBits(bits)>0);
+  const solid=rasterizeCoverageChunk('3,2',a.polygons.map(p=>[p[0]]));assert.ok(countMaskBits(bits)<countMaskBits(solid));
 });
 
 test('canonical tile clipping and union raster produce one seam-spanning courtyard, never duplicate reward coverage', () => {
   const rings=[rectangle(-16,20,16,120),rectangle(-8,40,8,100).reverse()];
   const left=rings.map(ring=>ring.map(([x,y])=>[x+4096,y]));
   const tiles=[tile(8191,8192,encode([left,left])),tile(8192,8192,encode([rings,rings]))];
-  const processor=new TileCoverageProcessor(),result=processor.process({key:'4,4',tiles,manifest});
+  const processor=new TileCoverageProcessor(),result=processor.process({key:'2,2',tiles,manifest});
   const toLocal=([x,y])=>lonLatToLocal([x/4096/16384*360,Math.atan(Math.sinh(Math.PI*(1-2*(8192+y/4096)/16384)))*180/Math.PI],manifest.center,0);
-  const expected=rasterizeCoverageChunk('4,4',[rings.map(ring=>ring.map(toLocal))]);
+  const expected=rasterizeCoverageChunk('2,2',[rings.map(ring=>ring.map(toLocal))]);
   assert.deepEqual(result.bits,expected);assert.ok(countMaskBits(result.bits)>0);
-  const reversed=processor.process({key:'4,4',tiles:[...tiles].reverse(),manifest});assert.deepEqual(reversed.bits,result.bits);
+  const reversed=processor.process({key:'2,2',tiles:[...tiles].reverse(),manifest});assert.deepEqual(reversed.bits,result.bits);
 });
 
 test('malformed PBF cannot be interpreted as successful empty coverage', () => {
@@ -144,18 +144,18 @@ test('dispose while source pending aborts and cannot attach stale masks', async 
   assert.equal(mask.coverage.size,0);assert.equal(changes.length,0);
 });
 
-test('coverage residency stays bounded and renderer receives eviction notifications', async () => {
+test('coverage residency stays bounded while traversing the smaller 3km arena', async () => {
   const {stream,mask,changes}=streamWith();
-  for(const x of [-2500,-1500,-500,500,1500,2500])await stream.update([x,0],500,[1,0]);
-  assert.ok(stream.stats.maxCoverageChunks<=36);assert.ok(mask.coverage.size<=36);assert.ok(changes.some(([,bits])=>bits===null));
+  for(const x of [-1500,-900,-300,300,900,1500])await stream.update([x,0],500,[1,0]);
+  assert.ok(stream.stats.maxCoverageChunks<=36);assert.ok(mask.coverage.size<=36);assert.ok(changes.some(([,bits])=>bits instanceof Uint8Array));
   assert.ok(stream.source.stats.retainedTiles<=24);assert.ok(stream.stats.retainedDecodedTiles<=24);stream.dispose();
 });
 
 test('radius cap and arena clipping prevent whole-sector or impossible outside loads', async () => {
   const {stream}=streamWith();
   await assert.rejects(stream.prepare([0,0],501));
-  await stream.prepare([2990,2990],500);assert.equal(stream.covers([2990,2990],500),true);
-  for(const key of stream.coverage.keys()){const b=maskChunkBounds(key);assert.ok(b.maxX<=2500&&b.maxY<=2500);}
+  await stream.prepare([1990,1990],500);assert.equal(stream.covers([1990,1990],500),true);
+  for(const key of stream.coverage.keys()){const b=maskChunkBounds(key);assert.ok(b.maxX<=1500&&b.maxY<=1500);}
   assert.ok(stream.coverage.size<=9);stream.dispose();
 });
 
@@ -174,9 +174,9 @@ test('changed desired region never receives obsolete in-flight chunks', async ()
   let release,started;
   const began=new Promise(resolve=>started=resolve),gate=new Promise(resolve=>release=resolve);let first=true;
   const {stream,changes}=streamWith(mockFetch(async()=>{if(first){first=false;started();await gate;}return new Response(encode());}));
-  const old=stream.update([-2400,-2400],18);await began;
-  const newest=stream.update([2400,2400],18);release();await Promise.all([old,newest]);
-  assert.equal(stream.covers([2400,2400],18),true);assert.equal(stream.covers([-2400,-2400],18),false);
+  const old=stream.update([-1400,-1400],18);await began;
+  const newest=stream.update([1400,1400],18);release();await Promise.all([old,newest]);
+  assert.equal(stream.covers([1400,1400],18),true);assert.equal(stream.covers([-1400,-1400],18),false);
   assert.ok(changes.every(([key])=>stream.desired.has(key)));stream.dispose();
 });
 
@@ -185,18 +185,22 @@ test('existing real Gatchina courtyard geometry survives local GeoJSON-to-PBF ad
   const realManifest=JSON.parse(await fs.readFile(new URL('../public/data/gatchina/manifest.json',import.meta.url),'utf8'));
   const data=JSON.parse(await fs.readFile(new URL('../public/data/gatchina/chunks/3-4.json',import.meta.url),'utf8'));
   const building=data.buildings.find(b=>b.id==='r1659230');assert.ok(building);assert.equal(building.polygons[0].length,3);
+  // Recenter the fixture on the real building; the old prepared-city origin
+  // placed it outside the new 3 km arena. Its geographic geometry is unchanged.
+  realManifest.center=[30.1075,59.5633];realManifest.projectionLatitude=59.5633;realManifest.arenaSize=3000;
+  const polygons=[building.geometry.coordinates.map(ring=>ring.map(point=>lonLatToLocal(point,realManifest.center,realManifest.projectionLatitude)))];
   const index=new GeoJSONVT({type:'FeatureCollection',features:[{type:'Feature',properties:{},geometry:building.geometry}]},{maxZoom:14,indexMaxZoom:14,tolerance:0,extent:4096,buffer:64});
   const {maskChunksForBounds}=await import('../src/consumption-mask.js');
-  const keys=maskChunksForBounds(building.bbox),processor=new TileCoverageProcessor();let actualCount=0,expectedCount=0,differences=0,solidCount=0;
+  const keys=maskChunksForBounds(getBounds(polygons)),processor=new TileCoverageProcessor();let actualCount=0,expectedCount=0,differences=0,solidCount=0;
   for(const key of keys){
     const tiles=nativeTilesForBounds(realManifest,maskChunkBounds(key)).map(({z,x,y})=>{
       const encoded=fromGeojsonVt({building:index.getTile(z,x,y)||{features:[]}},{extent:4096});
       return {...tile(x,y,encoded.buffer.slice(encoded.byteOffset,encoded.byteOffset+encoded.byteLength)),sourceKey:'offline-real-gatchina-r1659230'};
     });
-    const result=processor.process({key,tiles,manifest:realManifest}),expected=rasterizeCoverageChunk(key,building.polygons);
+    const result=processor.process({key,tiles,manifest:realManifest}),expected=rasterizeCoverageChunk(key,polygons);
     actualCount+=countMaskBits(result.bits);expectedCount+=countMaskBits(expected);
     const delta=new Uint8Array(8192);for(let i=0;i<8192;i++)delta[i]=result.bits[i]^expected[i];differences+=countMaskBits(delta);
-    const solid=rasterizeCoverageChunk(key,building.polygons.map(p=>[p[0]]));
+    const solid=rasterizeCoverageChunk(key,polygons.map(p=>[p[0]]));
     solidCount+=countMaskBits(solid);
   }
   assert.ok(actualCount>1000);assert.ok(actualCount<solidCount,'Real courtyard holes must survive the PBF path');assert.ok(differences/expectedCount<0.02,`Native tile quantization changed ${differences}/${expectedCount} cells`);

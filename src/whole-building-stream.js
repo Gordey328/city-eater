@@ -101,6 +101,24 @@ export class WholeBuildingStream{
     this.check();if(!this.ready||this.generation!==generation||result.generation!==generation||result.type!=='whole-raster'||!Array.isArray(result.chunks))throw abortError();
     return result.chunks;
   }
+  async rasterizeSeparately(buildings){
+    this.check();if(!this.ready||!Array.isArray(buildings)||buildings.length>16)throw abortError();
+    const generation=this.generation,catalog=new Set(this.buildings);
+    if(buildings.some(building=>!catalog.has(building)||building.complete!==true))throw abortError();
+    let result;
+    try{result=await this.submit({type:'whole-raster-separate',generation,ids:buildings.map(building=>building.id)});}
+    catch(error){if(this.disposed||!this.ready||this.generation!==generation)throw abortError();throw error;}
+    this.check();if(!this.ready||this.generation!==generation||result.generation!==generation||result.type!=='whole-raster-separate'||!Array.isArray(result.items))throw abortError();
+    let bytes=0;const expected=new Set(buildings.map(building=>building.id)),seen=new Set();
+    if(result.items.length!==expected.size)throw new Error('Неполный набор отдельных масок домов.');
+    for(const item of result.items){
+      if(!expected.has(item.id)||seen.has(item.id)||!Array.isArray(item.chunks))throw new Error('Некорректная отдельная маска дома.');
+      seen.add(item.id);
+      for(const[,bits]of item.chunks){if(!(bits instanceof Uint8Array)||bits.byteLength!==8192)throw new Error('Некорректная отдельная маска дома.');bytes+=bits.byteLength;}
+    }
+    if(bytes>1024*1024)throw new Error('Отдельные маски домов превышают безопасный предел.');
+    return result.items;
+  }
   async retry(position,radius){
     if(this.pending)try{await this.pending;}catch{}
     this.check();this.failed.clear();this.source.retryFailures({clearCache:true});

@@ -1,9 +1,10 @@
 import {MASK_ARENA_HALF,MASK_CHUNKS_PER_AXIS,maskChunkBounds} from './consumption-mask.js';
 /** One cached bitmap per resident 512m region, never a growing GeoJSON history. */
 export class MaskDisplay {
-  constructor(mask){this.mask=mask;this.images=new Map();this.dirty=new Set();this.stats={rebuiltChunks:0,drawnChunks:0};}
+  constructor(mask){this.mask=mask;this.images=new Map();this.dirty=new Set();this.replacements=new Map();this.stats={rebuiltChunks:0,drawnChunks:0};}
   changed(key){this.dirty.add(key);}
-  dispose(){this.images.clear();this.dirty.clear();}
+  setReplacements(chunks){for(const key of this.replacements.keys())this.dirty.add(key);for(const key of chunks.keys())this.dirty.add(key);this.replacements=chunks;}
+  dispose(){this.images.clear();this.dirty.clear();this.replacements.clear();}
   update(){
     for(const key of this.images.keys())if(!this.mask.getCoverageChunk(key))this.images.delete(key);
     for(const key of this.mask.coverage.keys())if(!this.images.has(key))this.dirty.add(key);
@@ -11,10 +12,10 @@ export class MaskDisplay {
       const coverage=this.mask.getCoverageChunk(key);if(!coverage){this.images.delete(key);continue;}
       let image=this.images.get(key);
       if(!image){const canvas=document.createElement('canvas');canvas.width=canvas.height=256;image={canvas,context:canvas.getContext('2d'),pixels:new ImageData(256,256)};this.images.set(key,image);}
-      const eaten=this.mask.getConsumedChunk(key),pixels=image.pixels.data;
+      const eaten=this.mask.getConsumedChunk(key),replaced=this.replacements.get(key),pixels=image.pixels.data;
       // The world bit order increases north; bitmap rows increase down.
       for(let byte=0;byte<coverage.length;byte++){
-        const visible=coverage[byte]&~(eaten?.[byte]||0),base=byte*8;
+        const visible=coverage[byte]&~(eaten?.[byte]||0)&~(replaced?.[byte]||0),base=byte*8;
         for(let bit=0;bit<8;bit++){const index=base+bit,x=index&255,y=index>>>8,p=((255-y)*256+x)*4;pixels[p]=144;pixels[p+1]=169;pixels[p+2]=102;pixels[p+3]=(visible&(1<<bit))?255:0;}
       }
       image.context.putImageData(image.pixels,0,0);this.stats.rebuiltChunks++;

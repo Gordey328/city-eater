@@ -1,9 +1,9 @@
 import {ARENA_SIZE_METRES, ARENA_HALF_METRES, ARENA_AREA_M2, DISTRICT_GOAL_AREA_M2, RADIUS_CAP_METRES, clampArenaPosition} from './game-config.js';
 export {boundaryOverrun,clampArenaPosition} from './game-config.js';
 
-/** A fresh namespace deliberately leaves the old 10 km runs untouched. */
-export const STREAM_MODE = 'tile-mask-5km-v2';
-export const STREAM_SCHEMA_VERSION = 2;
+/** A fresh namespace deliberately leaves the old 5 km and 10 km runs untouched. */
+export const STREAM_MODE = 'tile-mask-3km-v3';
+export const STREAM_SCHEMA_VERSION = 3;
 export const STREAM_RADIUS_CAP = RADIUS_CAP_METRES;
 export const STREAM_CELL_METERS = 2;
 const milestones = [10000, 50000, 100000, 500000, 1000000, 2500000, 5000000];

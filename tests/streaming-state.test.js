@@ -21,31 +21,32 @@ test('completing the goal does not stop rewards, scoring, play or growth',()=>{
   rewardStreamArea(run,100000);assert.ok(run.radius>radius);assert.equal(run.consumedArea,200000);assert.equal(run.score,20000);assert.equal(run.progress,100);
 });
 test('radius cap is explicit and never caps earned area or score',()=>{
-  const run=createStreamRun(sector);rewardStreamArea(run,10000000);
-  assert.equal(run.radius,STREAM_RADIUS_CAP);assert.equal(run.consumedArea,10000000);assert.equal(run.score,1000000);assert.equal(run.radiusCapped,true);
+  const run=createStreamRun(sector);rewardStreamArea(run,8000000);
+  assert.equal(run.radius,STREAM_RADIUS_CAP);assert.equal(run.consumedArea,8000000);assert.equal(run.score,800000);assert.equal(run.radiusCapped,true);
 });
-test('new stream identity and 5km frame reject old geometry/schema without mutating save',()=>{
-  const saved=createStreamRun(sector);assert.equal(saved.frame.arenaSize,ARENA_SIZE_METRES);assert.equal(ARENA_HALF_METRES,2500);
+test('new stream identity and 3km frame reject old geometry/schema without mutating save',()=>{
+  const saved=createStreamRun(sector);assert.equal(saved.frame.arenaSize,ARENA_SIZE_METRES);assert.equal(ARENA_SIZE_METRES,3000);assert.equal(ARENA_HALF_METRES,1500);
+  assert.equal(STREAM_MODE,'tile-mask-3km-v3');assert.equal(STREAM_SCHEMA_VERSION,3);
   assert.throws(()=>createStreamRun({...sector,center:[31,60]},saved),/несовместимы/);assert.equal(saved.frame.center[0],30);
   assert.equal(createStreamRun(sector,saved).mode,STREAM_MODE);assert.equal(saved.schemaVersion,STREAM_SCHEMA_VERSION);
-  for(const patch of [{mode:'tile-mask-v1'},{schemaVersion:1},{schemaVersion:3},{frame:{...saved.frame,arenaSize:10000}},{position:[3000.001,0]},{consumedArea:25000004}])
+  for(const patch of [{mode:'tile-mask-v1'},{mode:'tile-mask-5km-v2'},{schemaVersion:1},{schemaVersion:2},{frame:{...saved.frame,arenaSize:10000}},{frame:{...saved.frame,arenaSize:5000}},{position:[2000.001,0]},{consumedArea:9000004}])
     assert.throws(()=>createStreamRun(sector,{...saved,...patch}),/несовместимы/);
   assert.equal(sameStreamFrame(saved.frame,{...saved.frame,arenaSize:10000}),false);
 });
 test('area rewards must use whole 2m cells and cannot exceed the complete active square',()=>{
   const run=createStreamRun(sector);
-  for(const area of [-4,3,NaN,Infinity,25000004,Number.MAX_SAFE_INTEGER])assert.throws(()=>rewardStreamArea(run,area));
-  assert.equal(run.consumedArea,0);rewardStreamArea(run,25000000);assert.equal(run.consumedArea,25000000);
-  assert.throws(()=>rewardStreamArea(run,4));assert.equal(run.consumedArea,25000000);
+  for(const area of [-4,3,NaN,Infinity,9000004,Number.MAX_SAFE_INTEGER])assert.throws(()=>rewardStreamArea(run,area));
+  assert.equal(run.consumedArea,0);rewardStreamArea(run,9000000);assert.equal(run.consumedArea,9000000);
+  assert.throws(()=>rewardStreamArea(run,4));assert.equal(run.consumedArea,9000000);
 });
 test('radius-sized boundary halo lets the hole reach edge/corner buildings',()=>{
   assert.equal(boundaryOverrun(-1),0);assert.equal(boundaryOverrun(0),0);assert.equal(boundaryOverrun(18),18);assert.equal(boundaryOverrun(1000),500);
   assert.throws(()=>boundaryOverrun(NaN));assert.throws(()=>clampArenaPosition([Infinity,0],18));
-  assert.deepEqual(clampArenaPosition([9999,-9999],18),[2518,-2518]);assert.deepEqual(clampArenaPosition([9999,-9999],500),[3000,-3000]);
-  const saved=createStreamRun(sector);saved.position=[3000,-3000];
-  assert.deepEqual(createStreamRun(sector,saved).position,[2518,-2518]);
-  saved.consumedArea=5000000;assert.deepEqual(createStreamRun(sector,saved).position,[3000,-3000]);
-  const run=createStreamRun(sector);run.position=[9999,-9999];rewardStreamArea(run,5000000);assert.deepEqual(run.position,[3000,-3000]);
+  assert.deepEqual(clampArenaPosition([9999,-9999],18),[1518,-1518]);assert.deepEqual(clampArenaPosition([9999,-9999],500),[2000,-2000]);
+  const saved=createStreamRun(sector);saved.position=[2000,-2000];
+  assert.deepEqual(createStreamRun(sector,saved).position,[1518,-1518]);
+  saved.consumedArea=5000000;assert.deepEqual(createStreamRun(sector,saved).position,[2000,-2000]);
+  const run=createStreamRun(sector);run.position=[9999,-9999];rewardStreamArea(run,5000000);assert.deepEqual(run.position,[2000,-2000]);
 });
 test('restored and serialized runs detach frame and position and recompute goal truth',()=>{
   const saved=createStreamRun(sector);saved.consumedArea=100000;saved.completed=false;saved.progress=-10;saved.goalArea=1;

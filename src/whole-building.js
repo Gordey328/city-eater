@@ -5,7 +5,7 @@ import {lonLatToLocal, getBounds, minimalEnclosingCircle, polygonsArea} from './
 import {maskChunksForBounds, rasterizeCoverageChunk, countMaskBits} from './consumption-mask.js';
 
 export const WHOLE_LIMITS = Object.freeze({tiles: 64, bytes: 32 * 1024 * 1024, vertices: 300000,
-  fragments: 30000, comparisons: 250000, gridReferences: 500000, buildings: 12000, rasterBuildings: 256, rasterChunks: 36});
+  fragments: 30000, comparisons: 250000, gridReferences: 500000, buildings: 12000, rasterBuildings: 256, rasterChunks: 36, separateBuildings: 16, separateBytes: 1024 * 1024, modelParts: 64, modelVertices: 300000});
 const N = 16384, EPS = 1e-10, AREA_EPS = 1e-14, CELL = 1 / 32;
 const fail = message => { throw new Error(`Целые здания: ${message}`); };
 const boxOf = polygons => {
@@ -19,6 +19,24 @@ const area = polygons => polygons.reduce((sum,polygon)=>sum+polygon.reduce((valu
   return value+(index?-1:1)*Math.abs(signed)/2;
 },0),0);
 const signature = properties => JSON.stringify(['render_height','render_min_height','colour','hide_3d'].map(key=>properties?.[key]??null));
+// OpenMapTiles emits derived rendering values, without retaining whether they
+// came from a height tag, levels, or the upstream 5 m default. Never label these
+// values as measured. Unsupported/missing attributes do not invent a new height.
+const NAMED_COLOURS=new Set('black silver gray grey white maroon red purple fuchsia green lime olive yellow navy blue teal aqua orange brown beige tan gold pink violet indigo cyan magenta darkred darkgreen darkblue darkgray darkgrey lightgray lightgrey lightblue lightgreen ivory coral salmon khaki turquoise transparent'.split(' '));
+export function buildingRenderAttributes(properties={}){
+  const raw=properties.render_height,min=properties.render_min_height;
+  const missing=raw===undefined||raw===null;
+  const validHeight=typeof raw==='number'&&Number.isFinite(raw)&&raw>0&&raw<=3660;
+  const validMin=min===undefined||min===null||(typeof min==='number'&&Number.isFinite(min)&&min>=0&&min<raw);
+  const valid=validHeight&&validMin;
+  const colourValue=typeof properties.colour==='string'&&properties.colour.length<=32?properties.colour.toLowerCase().trim():'';
+  const colour=/^#[0-9a-f]{6}$/.test(colourValue)?colourValue:/^#[0-9a-f]{3}$/.test(colourValue)?'#'+[...colourValue.slice(1)].map(c=>c+c).join(''):NAMED_COLOURS.has(colourValue)?colourValue:null;
+  const hide=properties.hide_3d;
+  const hide3d=![undefined,null,false,0,'false','0',''].includes(hide);
+  return{heightMeters:valid?raw:null,minHeightMeters:valid?(min??0):null,colour,hide3d,
+    heightProvenance:valid?'source-approximation':missing?'missing':'invalid',
+    minHeightProvenance:min===undefined||min===null?'ground-fallback':validMin&&validHeight?'source-approximation':'invalid'};
+}
 const tileIdentity = tile => `${tile.x}/${tile.y}`;
 const opposite = {left:'right',right:'left',top:'bottom',bottom:'top'};
 function seamIntervals(polygons,x,y){
@@ -67,7 +85,7 @@ export function decodeWholeFragments(tile,manifest){
       const raw=[polygon.map(ring=>ring.map(p=>[x+p.x/layer.extent,y+p.y/layer.extent]))];
       let core;try{core=polygonClipping.intersection(raw,box);}catch{fail('не удалось отсечь контур');}
       if(!core.length||area(core)<=AREA_EPS)continue;
-      fragments.push({tile:tileIdentity(tile),x,y,raw,core,rawBounds:boxOf(raw),bounds:boxOf(core),properties:signature(feature.properties),seams:seamIntervals(core,x,y),matched:{left:[],right:[],top:[],bottom:[]}});
+      fragments.push({tile:tileIdentity(tile),x,y,raw,core,rawBounds:boxOf(raw),bounds:boxOf(core),properties:signature(feature.properties),render:buildingRenderAttributes(feature.properties),seams:seamIntervals(core,x,y),matched:{left:[],right:[],top:[],bottom:[]}});
     }
   }
   return{fragments,vertices};
@@ -117,7 +135,7 @@ export function reconstructWholeBuildings(tiles,manifest,{generation=1}={}){
     for(let x=minX;x<=maxX;x++)for(let y=minY;y<=maxY;y++){const key=`${x},${y}`;if(!grid.has(key))grid.set(key,[]);grid.get(key).push(i);}
   }
   const groups=new Map();for(let i=0;i<fragments.length;i++){const root=find(i);if(!groups.has(root))groups.set(root,[]);groups.get(root).push(fragments[i]);}
-  const buildings=[];let incomplete=0,oversize=0,outputVertices=0;
+  const buildings=[];let incomplete=0,oversize=0,outputVertices=0,modelVertices=0,modelFallbacks=0;
   const project=([x,y])=>lonLatToLocal([x/N*360-180,Math.atan(Math.sinh(Math.PI*(1-2*y/N)))*180/Math.PI],manifest.center,manifest.projectionLatitude);
   for(const members of groups.values()){
     if(members.some(fragment=>Object.keys(fragment.seams).some(side=>fragment.seams[side].some(interval=>!covered(interval,fragment.matched[side]))))){incomplete++;continue;}
@@ -128,10 +146,28 @@ export function reconstructWholeBuildings(tiles,manifest,{generation=1}={}){
     if(b.maxX-b.minX>1000||b.maxY-b.minY>1000){oversize++;continue;}
     outputVertices+=polygons.reduce((n,p)=>n+p.reduce((s,r)=>s+r.length,0),0);if(outputVertices>WHOLE_LIMITS.vertices)fail('превышен предел готовых контуров');
     const circle=minimalEnclosingCircle(polygons);
-    buildings.push({id:`whole-${generation}-${buildings.length}`,polygons,bounds:[b.minX,b.minY,b.maxX,b.maxY],center:circle.center,radius:circle.radius,area:polygonsArea(polygons),complete:true});
+    // Keep rendering parts separate from the authoritative union used for fit
+    // and reward. A tall overlapping part must not raise the entire complex.
+    const renderGroups=new Map();for(const fragment of members){if(!renderGroups.has(fragment.properties))renderGroups.set(fragment.properties,[]);renderGroups.get(fragment.properties).push(fragment);}
+    let modelParts=[],modelFallback=null,partVertices=0;
+    if(renderGroups.size===1){modelParts=[{polygons,...members[0].render}];}
+    else if(renderGroups.size<=WHOLE_LIMITS.modelParts){
+      for(const fragments of renderGroups.values()){
+        let partPolygons;
+        try{partPolygons=polygonClipping.union(...fragments.flatMap(fragment=>fragment.core)).map(polygon=>polygon.map(ring=>ring.map(project)));}
+        catch{modelFallback='geometry-limit';break;}
+        const count=partPolygons.reduce((n,p)=>n+p.reduce((s,r)=>s+r.length,0),0);
+        if(modelVertices+partVertices+count>WHOLE_LIMITS.modelVertices){modelFallback='vertex-limit';break;}
+        partVertices+=count;modelParts.push({polygons:partPolygons,...fragments[0].render});
+      }
+    }else modelFallback='part-limit';
+    if(modelFallback){modelParts=[];modelFallbacks++;}else modelVertices+=partVertices;
+    const uniform=renderGroups.size===1?members[0].render:null;
+    buildings.push({id:`whole-${generation}-${buildings.length}`,polygons,bounds:[b.minX,b.minY,b.maxX,b.maxY],center:circle.center,radius:circle.radius,area:polygonsArea(polygons),complete:true,
+      modelParts,modelFallback,heightMeters:uniform?.heightMeters??null,minHeightMeters:uniform?.minHeightMeters??null,heightProvenance:uniform?.heightProvenance??'mixed'});
     if(buildings.length>WHOLE_LIMITS.buildings)fail('слишком много цельных контуров');
   }
-  return{buildings,sourceKey:tiles[0].sourceKey,stats:{sourceTiles:seenTiles.size,fragments:fragments.length,vertices,comparisons,joinedSeams,overlapJoins,incomplete,oversize,buildings:buildings.length,reconstructMs:performance.now()-started}};
+  return{buildings,sourceKey:tiles[0].sourceKey,stats:{sourceTiles:seenTiles.size,fragments:fragments.length,vertices,comparisons,joinedSeams,overlapJoins,incomplete,oversize,modelVertices,modelFallbacks,buildings:buildings.length,reconstructMs:performance.now()-started}};
 }
 
 export function rasterizeWholeBuildings(buildings){
@@ -146,4 +182,18 @@ export function rasterizeWholeBuildings(buildings){
   if(keys.size>WHOLE_LIMITS.rasterChunks||vertices>WHOLE_LIMITS.vertices)fail('слишком большой шаг поглощения');
   const chunks=[];for(const key of keys){const bits=rasterizeCoverageChunk(key,polygons);if(countMaskBits(bits))chunks.push([key,bits]);}
   return chunks;
+}
+
+/** Individual footprint masks for a small visible render batch. Preflight the
+ * complete response before rasterizing so an oversized batch is all-or-nothing. */
+export function rasterizeWholeBuildingsSeparately(buildings){
+  if(!Array.isArray(buildings)||buildings.length>WHOLE_LIMITS.separateBuildings)fail('слишком много домов для раздельных масок');
+  let bytes=0,vertices=0;const ids=new Set();
+  for(const building of buildings){
+    if(building?.complete!==true||!Array.isArray(building.polygons)||typeof building.id!=='string'||ids.has(building.id))fail('неверный набор отдельных домов');
+    ids.add(building.id);bytes+=maskChunksForBounds(building.bounds).length*8192;
+    vertices+=building.polygons.reduce((n,p)=>n+p.reduce((s,r)=>s+r.length,0),0);
+    if(bytes>WHOLE_LIMITS.separateBytes||vertices>WHOLE_LIMITS.vertices)fail('раздельные маски превышают безопасный предел');
+  }
+  return buildings.map(building=>({id:building.id,chunks:rasterizeWholeBuildings([building])}));
 }
