@@ -10,7 +10,7 @@ export function visualSourceVertexCount(building){
 export function classifyFootprint(chunks,mask){
   let nonempty=false,eaten=false,remaining=false;
   if(!Array.isArray(chunks)||!chunks.length)return'unknown';
-  for(const [key,bits] of chunks){const coverage=mask.getCoverageChunk(key),consumed=mask.getConsumedChunk(key);if(!(bits instanceof Uint8Array)||bits.length!==8192||!coverage)return'unknown';
+  for(const [key,bits] of (mask.clipFootprintChunks?.(chunks)||chunks)){const coverage=mask.getCoverageChunk(key),consumed=mask.getConsumedChunk(key);if(!(bits instanceof Uint8Array)||bits.length!==8192||!coverage)return'unknown';
     for(let i=0;i<bits.length;i++){const value=bits[i];if(!value)continue;nonempty=true;if(value&~coverage[i])return'unknown';if(value&(consumed?.[i]||0))eaten=true;if(value&~(consumed?.[i]||0))remaining=true;}
   }
   return !nonempty?'unknown':!remaining?'gone':eaten?'partial':'untouched';
@@ -47,7 +47,7 @@ export class WholeVisualLayer{
   schedule(){if(this.pending||!this.whole?.ready||this.disposed)return;const buildings=this.candidates.filter(b=>!this.cache.has(b.id)&&!this.failed.has(b.id)&&!this.gone.has(b.id)&&!this.budgetBlocked.has(b.id)).slice(0,WHOLE_VISUAL_LIMITS.batch);if(!buildings.length)return;
     const whole=this.whole,generation=this.generation,promise=whole.rasterizeSeparately(buildings);this.pending=promise;
     promise.then(results=>{if(this.disposed||generation!==this.generation||whole!==this.whole||!whole.ready)return;
-      const current=new Set(this.candidates.map(b=>b.id)),wanted=new Map(buildings.map(b=>[b.id,b]));for(const result of results){const building=wanted.get(result.id);if(!building||!current.has(result.id)||this.cache.has(result.id)||!whole.buildings.includes(building)||!Array.isArray(result.chunks))continue;const bytes=result.chunks.reduce((n,[,bits])=>n+bits.byteLength,0);if(bytes>WHOLE_VISUAL_LIMITS.footprintBytes||this.bytes+bytes>WHOLE_VISUAL_LIMITS.footprintBytes||this.cache.size>=WHOLE_VISUAL_LIMITS.buildings){this.budgetBlocked.add(building.id);continue;}this.cache.set(building.id,{building,chunks:result.chunks,bytes,state:'unknown',consumedRevision:-1,coverageRevision:-1,model:null});this.bytes+=bytes;}
+      const current=new Set(this.candidates.map(b=>b.id)),wanted=new Map(buildings.map(b=>[b.id,b]));for(const result of results){const building=wanted.get(result.id);if(!building||!current.has(result.id)||this.cache.has(result.id)||!whole.buildings.includes(building)||!Array.isArray(result.chunks))continue;const bytes=result.chunks.reduce((n,[,bits])=>n+bits.byteLength,0);if(bytes>WHOLE_VISUAL_LIMITS.footprintBytes||this.bytes+bytes>WHOLE_VISUAL_LIMITS.footprintBytes||this.cache.size>=WHOLE_VISUAL_LIMITS.buildings){this.budgetBlocked.add(building.id);continue;}this.cache.set(building.id,{building,chunks:this.mask.clipFootprintChunks?.(result.chunks)||result.chunks,bytes,state:'unknown',consumedRevision:-1,coverageRevision:-1,model:null});this.bytes+=bytes;}
     }).catch(error=>{if(generation===this.generation&&error.name!=='AbortError')for(const b of buildings)this.failed.add(b.id);}).finally(()=>{if(this.pending===promise)this.pending=null;});
   }
   plan(models,frame,options={}){

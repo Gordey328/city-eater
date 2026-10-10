@@ -4,6 +4,8 @@ import {canvasPixelRatio} from './canvas-budget.js';
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 export function overviewProject([lon,lat]){const p=clamp(lat,-84.9,84.9)*Math.PI/180;return[(lon+180)/360,(1-Math.log(Math.tan(p)+1/Math.cos(p))/Math.PI)/2];}
 export function overviewUnproject([x,y]){return[((x*360)%360+360)%360-180,Math.atan(Math.sinh(Math.PI*(1-2*y)))*180/Math.PI];}
+const polygonCache=new WeakMap();
+export function overviewPolygon(polygon){let cached=polygonCache.get(polygon);if(cached)return cached;const origin=overviewProject(polygon[0][0]),path=typeof Path2D==='function'?new Path2D():null,bounds=[Infinity,Infinity,-Infinity,-Infinity],points=polygon.map(ring=>ring.map((point,i)=>{const p=overviewProject(point);p[0]+=Math.round(origin[0]-p[0]);bounds[0]=Math.min(bounds[0],p[0]);bounds[1]=Math.min(bounds[1],p[1]);bounds[2]=Math.max(bounds[2],p[0]);bounds[3]=Math.max(bounds[3],p[1]);if(path){i?path.lineTo(p[0]-origin[0],p[1]-origin[1]):path.moveTo(p[0]-origin[0],p[1]-origin[1]);if(i===ring.length-1)path.closePath();}return p;}));cached={origin,path,bounds,points};polygonCache.set(polygon,cached);return cached;}
 export class WorldOverview {
   constructor(container,land,center,onSelect){
     this.container=container;this.center=overviewProject(center||[30,35]);this.zoom=2;this.features=[];this.handlers=new Map();this.onSelect=onSelect;this.events=new AbortController();this.points=new Map();this.dragged=false;
@@ -33,7 +35,22 @@ export class WorldOverview {
   draw(){if(!this.ctx||!this.width)return;const c=this.ctx,scale=512*2**this.zoom;c.clearRect(0,0,this.width,this.height);c.fillStyle='#c5dce1';c.fillRect(0,0,this.width,this.height);c.fillStyle='#e3e8d4';c.strokeStyle='#9fae8e';c.lineWidth=.75;
     for(const p of this.land){const base=Math.round(this.center[0]-(p[0]?.[0]?.[0]||0));for(const shift of [base-1,base,base+1]){this.path(p,shift);c.fill('evenodd');c.stroke();}}
     this.backgroundDrawer?.(c,{center:[this.getCenter().lng,this.getCenter().lat],zoom:this.zoom,width:this.width,height:this.height});
-    for(const f of this.features){if(f.geometry.type==='Polygon'||f.geometry.type==='MultiPolygon'){const polygons=f.geometry.type==='Polygon'?[f.geometry.coordinates]:f.geometry.coordinates;for(const polygon of polygons){const p=polygon.map(r=>r.map(overviewProject)),shift=Math.round(this.center[0]-p[0][0][0]);this.path(p,shift);const status=f.properties?.status;c.fillStyle=status==='done'?'#678c3755':status==='cached'||status==='ready'?'#b7da6655':'#dce5bc33';c.strokeStyle=status==='done'?'#4e722e':'#6e8553';c.lineWidth=f.properties?.selected?2.5:1.25;c.fill('evenodd');c.stroke();const progress=Math.max(0,Math.min(100,Number(f.properties?.goalProgress)||0));const points=p.flat().map(q=>[(q[0]+shift-this.center[0])*scale+this.width/2,(q[1]-this.center[1])*scale+this.height/2]),xs=points.map(q=>q[0]),ys=points.map(q=>q[1]),left=Math.min(...xs),right=Math.max(...xs),top=Math.min(...ys),bottom=Math.max(...ys);if(progress>0){c.save();c.clip('evenodd');c.fillStyle=progress>=100?'#739d45aa':'#a5ce62aa';c.fillRect(left,bottom-(bottom-top)*progress/100,right-left,(bottom-top)*progress/100);c.restore();}if(right-left>64&&bottom-top>45){const label=progress>=100?'✓ Цель':`${Math.floor(progress)}% цели`;c.save();c.font='600 11px monospace';c.textAlign='center';c.lineWidth=4;c.strokeStyle='#f7fbe9';c.strokeText(label,(left+right)/2,(top+bottom)/2);c.fillStyle='#304c20';c.fillText(label,(left+right)/2,(top+bottom)/2);c.restore();}}}else if(f.geometry.type==='Point'){const p=this.project(f.geometry.coordinates);c.beginPath();c.arc(p.x,p.y,9,0,Math.PI*2);c.fillStyle='#192c15';c.fill();c.strokeStyle='#d8fa51';c.lineWidth=3;c.stroke();}}
+    for(const f of this.features){
+      if(f.geometry.type==='Polygon'||f.geometry.type==='MultiPolygon'){
+        const polygons=f.geometry.type==='Polygon'?[f.geometry.coordinates]:f.geometry.coordinates;
+        for(const polygon of polygons){
+          const cached=overviewPolygon(polygon),p=cached.points,shift=Math.round(this.center[0]-p[0][0][0]),box=cached.bounds;
+          const left=(box[0]+shift-this.center[0])*scale+this.width/2,right=(box[2]+shift-this.center[0])*scale+this.width/2,top=(box[1]-this.center[1])*scale+this.height/2,bottom=(box[3]-this.center[1])*scale+this.height/2;
+          if(right<0||left>this.width||bottom<0||top>this.height)continue;
+          const status=f.properties?.status,progress=clamp(Number(f.properties?.goalProgress)||0,0,100),tx=(cached.origin[0]+shift-this.center[0])*scale+this.width/2,ty=(cached.origin[1]-this.center[1])*scale+this.height/2;
+          c.save();c.fillStyle=status==='done'?'#678c3755':status==='cached'||status==='ready'?'#b7da6655':'#dce5bc33';c.strokeStyle=status==='done'?'#4e722e':'#6e8553';c.lineWidth=f.properties?.selected?2.5:1.25;
+          if(cached.path){c.translate(tx,ty);c.scale(scale,scale);c.lineWidth/=scale;c.fill(cached.path,'evenodd');c.stroke(cached.path);}else{this.path(p,shift);c.fill('evenodd');c.stroke();}
+          if(progress>0){cached.path?c.clip(cached.path,'evenodd'):c.clip('evenodd');c.fillStyle=progress>=100?'#739d45aa':'#a5ce62aa';if(cached.path)c.fillRect((left-tx)/scale,(bottom-(bottom-top)*progress/100-ty)/scale,(right-left)/scale,(bottom-top)*progress/100/scale);else c.fillRect(left,bottom-(bottom-top)*progress/100,right-left,(bottom-top)*progress/100);}
+          c.restore();
+          if(right-left>64&&bottom-top>45){const anchor=f.properties?.labelCoordinate?this.project(f.properties.labelCoordinate):{x:(left+right)/2,y:(top+bottom)/2};if(anchor.x<0||anchor.x>this.width||anchor.y<0||anchor.y>this.height)continue;const label=progress>=100?'✓ Цель':`${Math.floor(progress)}% цели`;c.save();c.font='600 11px monospace';c.textAlign='center';c.lineWidth=4;c.strokeStyle='#f7fbe9';c.strokeText(label,anchor.x,anchor.y);c.fillStyle='#304c20';c.fillText(label,anchor.x,anchor.y);c.restore();}
+        }
+      }else if(f.geometry.type==='Point'){const p=this.project(f.geometry.coordinates);c.beginPath();c.arc(p.x,p.y,9,0,Math.PI*2);c.fillStyle='#192c15';c.fill();c.strokeStyle='#d8fa51';c.lineWidth=3;c.stroke();}
+    }
 
   }
   remove(){this.events.abort();this.observer.disconnect();this.container.replaceChildren();}
