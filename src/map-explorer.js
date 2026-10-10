@@ -4,6 +4,7 @@ import {localToLonLat} from './geometry.js';
 import {streamProgress} from './streaming-state.js';
 import {TileSource} from './tile-source.js';
 import {VisualTileLayer} from './visual-tile-source.js';
+import {canvasPixelRatio} from './canvas-budget.js';
 import {visibleVisualTiles,drawVisualTiles} from './canvas-tile-map.js';
 const normalize=value=>String(value||'').normalize('NFKD').toLocaleLowerCase().replace(/\p{M}/gu,'');
 const nearbyPlaceName=(name,anchor,point)=>{if(!name||!anchor||!point)return '';const dx=(((point[0]-anchor[0]+540)%360)-180)*111320*Math.cos(anchor[1]*Math.PI/180),dy=(point[1]-anchor[1])*111320;return Math.hypot(dx,dy)<50000?name:'';};
@@ -51,7 +52,7 @@ export class MapExplorer{
     }catch(error){this.status(error.message||'Карта недоступна. Обнови страницу.');}
   }
   updateVisualTiles(){
-    if(!this.visualLayer||!this.map)return;const center=this.map.getCenter(),tiles=visibleVisualTiles([center.lng,center.lat],this.map.getZoom(),this.map.width,this.map.height),signature=tiles.map(t=>`${t.z}/${t.x}/${t.y}`).sort().join('|');this.visualTiles=tiles;this.map.draw();if(signature===this.visualSignature)return;this.visualSignature=signature;this.visualLayer.ensure(tiles).catch(()=>{});
+    if(!this.visualLayer||!this.map)return;const center=this.map.getCenter(),tiles=visibleVisualTiles([center.lng,center.lat],this.map.getZoom(),this.map.width,this.map.height,16,canvasPixelRatio(this.map.width,this.map.height,globalThis.devicePixelRatio||1)),signature=tiles.map(t=>`${t.z}/${t.x}/${t.y}`).sort().join('|');this.visualTiles=tiles;this.map.draw();if(signature===this.visualSignature)return;this.visualSignature=signature;this.visualLayer.ensure(tiles).catch(()=>{});
   }
   getView(){if(!this.map)return this.view;const center=this.map.getCenter();return {center:[center.lng,center.lat],zoom:this.map.getZoom(),campaignId:this.campaign?.id||null};}
   saveView(){this.view=this.getView();try{localStorage.setItem('city-eater-map-view-5km-v2',JSON.stringify(this.view));}catch{}}

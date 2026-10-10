@@ -4,9 +4,16 @@ import {TileSource} from './tile-source.js';
 import {VisualTileLayer} from './visual-tile-source.js';
 
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
-export function visibleVisualTiles(center,zoom,width,height,maxTiles=16){
+export function visibleVisualTiles(center,zoom,width,height,maxTiles=16,pixelRatio=1){
   const p=overviewProject(center),world=512*2**zoom;
-  let z=clamp(Math.floor(zoom),0,14),result;
+  const ratio=clamp(Number(pixelRatio)||1,1,2);
+  let z=clamp(Math.floor(zoom+Math.log2(ratio)),0,19),result;
+  // Reserve the worst tile alignment, so crossing one tile edge cannot flip
+  // detail levels and repeatedly evict/re-rasterize the same source window.
+  while(z>0){const size=world/2**z,n=2**z;
+    const columns=Math.min(n,Math.ceil(width/size)+1),rows=Math.min(n,Math.ceil(height/size)+1);
+    if(columns*rows<=maxTiles)break;z--;
+  }
   for(;;){
     const n=2**z,x0=Math.floor((p[0]-width/2/world)*n),x1=Math.floor((p[0]+width/2/world)*n),y0=Math.max(0,Math.floor((p[1]-height/2/world)*n)),y1=Math.min(n-1,Math.floor((p[1]+height/2/world)*n));
     result=[];const seen=new Set();
@@ -43,10 +50,10 @@ export class CanvasTileMap {
   project(point){const p=overviewProject(point),center=overviewProject(this.center),world=512*2**this.zoom;return{x:(p[0]+Math.round(center[0]-p[0])-center[0])*world+this.width/2,y:(p[1]-center[1])*world+this.height/2};}
   getBounds(){const center=overviewProject(this.center),world=512*2**this.zoom;return{getWest:()=>((center[0]-this.width/2/world)*360-180),getEast:()=>((center[0]+this.width/2/world)*360-180),getSouth:()=>overviewUnproject([0,center[1]+this.height/2/world])[1],getNorth:()=>overviewUnproject([0,center[1]-this.height/2/world])[1]};}
   jumpTo({center,zoom}){if(center)this.center=[...center];if(Number.isFinite(zoom))this.zoom=clamp(zoom,0,19);this.revision++;this.ensure().catch(()=>{});this.draw();}
-  resize(){const width=this.container.clientWidth||innerWidth,height=this.container.clientHeight||innerHeight,d=canvasPixelRatio(width,height,devicePixelRatio||1,this.quality);this.width=width;this.height=height;this.canvas.width=Math.max(1,width*d);this.canvas.height=Math.max(1,height*d);this.canvas.style.width=`${width}px`;this.canvas.style.height=`${height}px`;this.ctx.setTransform(d,0,0,d,0,0);this.revision++;this.draw();if(this.started)this.ensure().catch(()=>{});}
+  resize(){const width=this.container.clientWidth||innerWidth,height=this.container.clientHeight||innerHeight,d=canvasPixelRatio(width,height,devicePixelRatio||1,this.quality);this.width=width;this.height=height;this.pixelRatio=d;this.canvas.width=Math.max(1,width*d);this.canvas.height=Math.max(1,height*d);this.canvas.style.width=`${width}px`;this.canvas.style.height=`${height}px`;this.ctx.setTransform(d,0,0,d,0,0);this.revision++;this.draw();if(this.started)this.ensure().catch(()=>{});}
   setQuality(quality){this.quality=quality;this.resize();}
   async ensure(force=false){
-    if(this.removed)return;const tiles=visibleVisualTiles(this.center,this.zoom,this.width,this.height),signature=tiles.map(t=>`${t.z}/${t.x}/${t.y}`).sort().join('|');this.tiles=tiles;
+    if(this.removed)return;const tiles=visibleVisualTiles(this.center,this.zoom,this.width,this.height,16,this.pixelRatio),signature=tiles.map(t=>`${t.z}/${t.x}/${t.y}`).sort().join('|');this.tiles=tiles;
     if(!force&&signature===this.requested)return;this.requested=signature;
     try{await this.layer.ensure(tiles);if(!this.removed){this.revision++;this.draw();}}
     catch(error){if(!this.removed)this.onError(error.message||String(error));throw error;}

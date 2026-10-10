@@ -4,6 +4,7 @@
 import {VectorTile, classifyRings} from '@mapbox/vector-tile';
 import {PbfReader} from 'pbf';
 export const VISUAL_TILE_SIZE = 512;
+export const VISUAL_MAX_DETAIL_SCALE = 32; // Native z14 geometry, display through z19.
 export const VISUAL_TILE_LIMITS = Object.freeze({features: 30000, vertices: 300000, commands: 40000});
 export const VISUAL_GROUND = '#e7e9d9';
 const layerOrder = ['landcover', 'landuse', 'park', 'water', 'waterway', 'transportation'];
@@ -49,10 +50,26 @@ function path(context, points, close) {
   for (let i = 2; i < points.length; i += 2) context.lineTo(points[i], points[i + 1]);
   if (close) context.closePath();
 }
-export function drawVisualTile(context, commands, size = VISUAL_TILE_SIZE) {
+/** A virtual tile is one exact, power-of-two crop of the source tile core. */
+export function normalizeVisualView(view = {scale: 1, x: 0, y: 0}) {
+  if (!view || !Number.isInteger(view.scale) || view.scale < 1 || view.scale > VISUAL_MAX_DETAIL_SCALE ||
+      (view.scale & (view.scale - 1)) !== 0 || !Number.isInteger(view.x) || !Number.isInteger(view.y) ||
+      view.x < 0 || view.y < 0 || view.x >= view.scale || view.y >= view.scale) {
+    throw new RangeError('Некорректная область визуального тайла.');
+  }
+  return {scale: view.scale, x: view.x, y: view.y};
+}
+export function drawVisualTile(context, commands, size = VISUAL_TILE_SIZE, view) {
+  const crop = normalizeVisualView(view);
+  if (!Number.isFinite(size) || size <= 0) throw new RangeError('Некорректный размер визуального тайла.');
   context.save(); context.setTransform(1, 0, 0, 1, 0, 0); context.clearRect(0, 0, size, size);
   context.fillStyle = VISUAL_GROUND; context.fillRect(0, 0, size, size);
-  context.scale(size / VISUAL_TILE_SIZE, size / VISUAL_TILE_SIZE);
+  // Clip before transforming, so buffered source geometry cannot escape this
+  // virtual tile. Rasterize the vectors directly rather than enlarging pixels.
+  context.beginPath(); context.rect(0, 0, size, size); context.clip();
+  const scale = size / VISUAL_TILE_SIZE * crop.scale;
+  context.setTransform(scale, 0, 0, scale, -crop.x * size, -crop.y * size);
+  // Retain the canonical source core, including at outer world/tile borders.
   context.beginPath(); context.rect(0, 0, VISUAL_TILE_SIZE, VISUAL_TILE_SIZE); context.clip();
   context.lineJoin = 'round'; context.lineCap = 'round';
   const fills = {green: '#cfdbbb', park: '#c4d3b3', water: '#a9cad0', ice: '#f7f8f2', sand: '#e8dec2', road: '#fffdef', rail: '#aeb1a2'};
